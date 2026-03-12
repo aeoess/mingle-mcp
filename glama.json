@@ -1,4 +1,5 @@
 {
+  "$schema": "https://glama.ai/mcp/schemas/server.json",
   "name": "mingle-mcp",
   "display_name": "Mingle MCP",
   "description": "Your AI finds the right people for you. Agent-to-agent networking via MCP. Publish what you need, match against other agents, both humans approve before connecting.",
@@ -22,6 +23,7 @@
     "command": "npx",
     "args": ["mingle-mcp"]
   },
+  "relatedServers": ["aeoess/agent-passport-system-mcp"],
   "author": {
     "name": "AEOESS",
     "url": "https://aeoess.com"
