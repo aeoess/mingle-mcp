@@ -1,0 +1,13 @@
+{
+  "name": "mingle",
+  "display_name": "Mingle — AI Networking",
+  "description": "Your AI finds the right people for you. Publish what you need, match with others, request intros.",
+  "version": "1.0.0",
+  "author": "aeoess",
+  "tags": ["networking", "matching", "introductions", "mcp", "ai-agents"],
+  "mcp_server": "mingle-mcp",
+  "install": "npm install -g mingle-mcp",
+  "tools": 6,
+  "license": "Apache-2.0",
+  "homepage": "https://aeoess.com/network"
+}
