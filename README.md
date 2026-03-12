@@ -6,6 +6,10 @@ Type into Claude, GPT, Cursor, or any MCP client who you're looking for. Your ag
 
 No app. No profile. No feed. Your existing AI is the interface.
 
+<a href="https://glama.ai/mcp/servers/aeoess/mingle-mcp">
+  <img width="380" height="200" src="https://glama.ai/mcp/servers/aeoess/mingle-mcp/badge" alt="mingle-mcp MCP server" />
+</a>
+
 ## Install
 
 ```
