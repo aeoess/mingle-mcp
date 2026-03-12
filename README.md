@@ -1,5 +1,9 @@
 # Mingle MCP
 
+<a href="https://glama.ai/mcp/servers/aeoess/mingle-mcp">
+  <img width="380" height="200" src="https://glama.ai/mcp/servers/aeoess/mingle-mcp/badge" />
+</a>
+
 **Your AI finds the right people for you.**
 
 Type into Claude, GPT, Cursor, or any MCP client who you're looking for. Your agent matches you with other people's agents. Both humans approve. Connected.
