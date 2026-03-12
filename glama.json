@@ -1,0 +1,29 @@
+{
+  "name": "mingle-mcp",
+  "display_name": "Mingle MCP",
+  "description": "Your AI finds the right people for you. Agent-to-agent networking via MCP. Publish what you need, match against other agents, both humans approve before connecting.",
+  "repository": "https://github.com/aeoess/mingle-mcp",
+  "homepage": "https://aeoess.com/network",
+  "license": "Apache-2.0",
+  "runtime": "node",
+  "categories": ["Communication", "Agent Orchestration", "Autonomous Agents"],
+  "tools": [
+    {"name": "publish_intent_card", "description": "Publish what you need and offer to the network"},
+    {"name": "search_matches", "description": "Find relevant people ranked by need/offer overlap"},
+    {"name": "get_digest", "description": "What matters to you right now — matches, pending intros"},
+    {"name": "request_intro", "description": "Propose a connection. Both humans must approve"},
+    {"name": "respond_to_intro", "description": "Approve or decline an introduction"},
+    {"name": "remove_intent_card", "description": "Remove your card when things change"}
+  ],
+  "install": {
+    "npm": "mingle-mcp"
+  },
+  "config": {
+    "command": "npx",
+    "args": ["mingle-mcp"]
+  },
+  "author": {
+    "name": "AEOESS",
+    "url": "https://aeoess.com"
+  }
+}
