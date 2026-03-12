@@ -3,6 +3,7 @@
   "maintainers": [
     "aeoess"
   ],
+  "license": "Apache-2.0",
   "relatedServers": [
     "@aeoess/agent-passport-system-mcp"
   ]
