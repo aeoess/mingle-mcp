@@ -1,0 +1,31 @@
+{
+  "name": "mingle-mcp",
+  "version": "1.0.0",
+  "description": "Your AI finds the right people for you. Agent-to-agent networking via MCP.",
+  "type": "module",
+  "bin": {
+    "mingle-mcp": "./build/index.js"
+  },
+  "scripts": {
+    "build": "tsc && chmod 755 build/index.js",
+    "dev": "tsx watch src/index.ts"
+  },
+  "keywords": ["mcp", "networking", "ai-agents", "matching", "intent-network", "claude", "gpt", "cursor"],
+  "author": "AEOESS <hello@aeoess.com>",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/aeoess/mingle-mcp"
+  },
+  "homepage": "https://aeoess.com/network",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.9.0",
+    "agent-passport-system": "^1.13.0",
+    "zod": "^3.24.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0",
+    "tsx": "^4.19.0",
+    "@types/node": "^22.0.0"
+  }
+}
