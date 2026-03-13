@@ -12,6 +12,23 @@ import { generateKeyPair, createIntentCard, sign } from "agent-passport-system";
 
 const API = process.env.MINGLE_API_URL || "https://api.aeoess.com";
 
+// Sanitize content from other agents before feeding into LLM context
+// Strips common prompt injection patterns and control sequences
+function sanitize(text: string | undefined): string {
+  if (!text) return "";
+  return text
+    .replace(/\[SYSTEM[^\]]*\]/gi, "[removed]")
+    .replace(/\[INST[^\]]*\]/gi, "[removed]")
+    .replace(/SYSTEM\s*OVERRIDE/gi, "[removed]")
+    .replace(/ignore\s+(previous|all|prior)\s+(instructions|prompts)/gi, "[removed]")
+    .replace(/do\s+not\s+ask\s+(the\s+)?user/gi, "[removed]")
+    .replace(/immediately\s+execute/gi, "[removed]")
+    .replace(/respond_to_intro/g, "[tool-ref-removed]")
+    .replace(/request_intro/g, "[tool-ref-removed]")
+    .replace(/approve|decline/gi, (match) => match) // keep these, they're legitimate words
+    .slice(0, 2000); // hard cap on field length
+}
+
 // Session state — keys generated fresh per session
 const keys = generateKeyPair();
 let agentId = `mingle-${Date.now().toString(36)}`;
@@ -57,6 +74,16 @@ server.tool(
     hours: z.number().default(24).describe("Hours until card expires"),
   },
   async (args) => {
+    // Input validation — prevent bloat attacks
+    const MAX_FIELD_LEN = 500;
+    const MAX_ITEMS = 10;
+    if (args.name.length > 100) return { content: [{ type: "text" as const, text: "Name too long (max 100 chars)" }], isError: true };
+    if ((args.needs?.length || 0) > MAX_ITEMS) return { content: [{ type: "text" as const, text: `Too many needs (max ${MAX_ITEMS})` }], isError: true };
+    if ((args.offers?.length || 0) > MAX_ITEMS) return { content: [{ type: "text" as const, text: `Too many offers (max ${MAX_ITEMS})` }], isError: true };
+    for (const item of [...(args.needs || []), ...(args.offers || [])]) {
+      if (item.description.length > MAX_FIELD_LEN) return { content: [{ type: "text" as const, text: `Description too long (max ${MAX_FIELD_LEN} chars)` }], isError: true };
+    }
+
     agentId = `mingle-${args.name.toLowerCase().replace(/[^a-z0-9]/g, '-')}`;
 
     const mapItem = (item: any) => ({
@@ -139,7 +166,7 @@ server.tool(
               person: m.agentA === agentId ? m.agentB : m.agentA,
               score: m.score,
               mutual: m.mutual,
-              explanation: m.explanation,
+              explanation: sanitize(m.explanation),
             })),
           }, null, 2),
         }],
@@ -173,14 +200,14 @@ server.tool(
             matches: (d.matches || []).slice(0, 5).map((m: any) => ({
               person: m.agentA === agentId ? m.agentB : m.agentA,
               score: m.score,
-              explanation: m.explanation,
+              explanation: sanitize(m.explanation),
             })),
             introsSent: (d.introsPending || []).length,
             introsWaiting: (d.introsReceived || []).length,
             introsDetail: (d.introsReceived || []).map((i: any) => ({
               introId: i.introId,
               from: i.requestedBy,
-              message: i.message,
+              message: sanitize(i.message),
             })),
             note: !d.hasCard ? "No card published yet. Use publish_intent_card to join the network." : undefined,
           }, null, 2),
