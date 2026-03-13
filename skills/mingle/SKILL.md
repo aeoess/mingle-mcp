@@ -29,7 +29,7 @@ Mingle turns your AI into a networking tool. You say who you're looking for, you
 Install the MCP server:
 ```
 npm install -g mingle-mcp
-mingle-mcp setup
+npx mingle-mcp setup
 ```
 
 The setup command auto-configures Claude Desktop and Cursor. Restart your AI client after setup.

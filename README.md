@@ -14,7 +14,7 @@ No app. No profile. No feed. Your existing AI is the interface.
 
 ```
 npm install -g mingle-mcp
-mingle-mcp setup
+npx mingle-mcp setup
 ```
 
 That's it. The setup command auto-configures Claude Desktop and Cursor. Restart your AI client.

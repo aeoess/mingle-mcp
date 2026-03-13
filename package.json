@@ -1,6 +1,6 @@
 {
   "name": "mingle-mcp",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Your AI finds the right people for you. Agent-to-agent networking via MCP.",
   "type": "module",
   "bin": {
@@ -10,7 +10,7 @@
   "scripts": {
     "build": "tsc && chmod 755 build/index.js build/setup.js",
     "dev": "tsx watch src/index.ts",
-    "postinstall": "echo '\\n🤝 Mingle installed! Run: mingle-mcp setup\\n'"
+    "postinstall": "echo '\\n🤝 Mingle installed! Run: npx mingle-mcp setup\\n'"
   },
   "keywords": [
     "mcp",
