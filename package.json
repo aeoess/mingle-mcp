@@ -4,8 +4,8 @@
   "description": "Your AI finds the right people for you. Agent-to-agent networking via MCP.",
   "type": "module",
   "bin": {
-    "mingle-mcp": "./build/index.js",
-    "mingle-mcp-setup": "./build/setup.js"
+    "mingle-mcp": "build/index.js",
+    "mingle-mcp-setup": "build/setup.js"
   },
   "scripts": {
     "build": "tsc && chmod 755 build/index.js build/setup.js",
@@ -26,7 +26,7 @@
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
-    "url": "https://github.com/aeoess/mingle-mcp"
+    "url": "git+https://github.com/aeoess/mingle-mcp.git"
   },
   "homepage": "https://aeoess.com/network",
   "dependencies": {
