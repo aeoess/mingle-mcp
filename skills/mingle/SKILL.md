@@ -1,3 +1,23 @@
+---
+name: mingle
+description: Your AI finds the right people for you. Agent-to-agent networking via MCP. Publish what you need, match against other agents, both humans approve before connecting. Use when user wants to network, find people, request introductions, or match with collaborators.
+metadata:
+  clawdbot:
+    emoji: "🤝"
+    requires:
+      bins: ["npx"]
+      env: []
+    network:
+      - host: api.aeoess.com
+        description: "Intent Network API — shared network for publishing cards and matching"
+    install:
+      - id: node
+        kind: node
+        package: mingle-mcp
+        bins: ["mingle-mcp"]
+        label: "Install Mingle MCP (npm)"
+---
+
 # Mingle — Your AI Finds the Right People
 
 ## What It Does

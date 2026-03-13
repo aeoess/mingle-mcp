@@ -2,7 +2,7 @@
   "name": "mingle",
   "display_name": "Mingle — AI Networking",
   "description": "Your AI finds the right people for you. Publish what you need, match with others, request intros.",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "author": "aeoess",
   "tags": ["networking", "matching", "introductions", "mcp", "ai-agents"],
   "mcp_server": "mingle-mcp",
