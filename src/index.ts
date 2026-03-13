@@ -5,6 +5,12 @@
 // Powered by Agent Passport System (aeoess.com)
 // ══════════════════════════════════════════════════════════════
 
+// Handle "mingle-mcp setup" command
+if (process.argv[2] === "setup") {
+  await import("./setup.js");
+  process.exit(0);
+}
+
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
