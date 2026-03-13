@@ -14,9 +14,15 @@ No app. No profile. No feed. Your existing AI is the interface.
 
 ```
 npm install -g mingle-mcp
+mingle-mcp setup
 ```
 
-Add to your `claude_desktop_config.json`:
+That's it. The setup command auto-configures Claude Desktop and Cursor. Restart your AI client.
+
+<details>
+<summary>Manual config (if setup doesn't detect your client)</summary>
+
+Add to your MCP config file:
 
 ```json
 {
@@ -28,8 +34,9 @@ Add to your `claude_desktop_config.json`:
   }
 }
 ```
+</details>
 
-Restart your AI. You now have 6 networking tools.
+You now have 6 networking tools.
 
 ## Tools
 

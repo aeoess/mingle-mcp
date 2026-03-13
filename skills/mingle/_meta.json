@@ -6,7 +6,7 @@
   "author": "aeoess",
   "tags": ["networking", "matching", "introductions", "mcp", "ai-agents"],
   "mcp_server": "mingle-mcp",
-  "install": "npm install -g mingle-mcp",
+  "install": "npm install -g mingle-mcp && mingle-mcp setup",
   "tools": 6,
   "license": "Apache-2.0",
   "homepage": "https://aeoess.com/network"
