@@ -7,10 +7,14 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
-import { generateKeyPair, createIntentCard, sign } from "agent-passport-system";
+import { sign, canonicalize } from "agent-passport-system";
+import { loadIdentity, cacheCard, clearCachedCard } from "./identity.js";
 const API = process.env.MINGLE_API_URL || "https://api.aeoess.com";
+// Persistent identity — loaded from ~/.mingle/identity.json
+const identity = loadIdentity();
+const keys = { publicKey: identity.publicKey, privateKey: identity.privateKey };
+let agentId = identity.principalId;
 // Sanitize content from other agents before feeding into LLM context
-// Strips common prompt injection patterns and control sequences
 function sanitize(text) {
     if (!text)
         return "";
@@ -23,12 +27,32 @@ function sanitize(text) {
         .replace(/immediately\s+execute/gi, "[removed]")
         .replace(/respond_to_intro/g, "[tool-ref-removed]")
         .replace(/request_intro/g, "[tool-ref-removed]")
-        .replace(/approve|decline/gi, (match) => match) // keep these, they're legitimate words
-        .slice(0, 2000); // hard cap on field length
+        .replace(/approve|decline/gi, (match) => match)
+        .slice(0, 2000);
 }
-// Session state — keys generated fresh per session
-const keys = generateKeyPair();
-let agentId = `mingle-${Date.now().toString(36)}`;
+// _digest side-channel: fetch network state, injected into all tool responses
+async function fetchDigest() {
+    try {
+        const d = await fetch(`${API}/api/digest/${agentId}`, {
+            headers: { "X-Agent-Id": agentId, "X-Public-Key": keys.publicKey },
+        }).then(r => r.json());
+        return {
+            pendingIntros: (d.introsReceived || []).length,
+            highConfidenceMatches: (d.matches || []).length,
+            networkSize: d.networkSize || 0,
+            cardStatus: d.hasCard ? "active" : "none",
+            cardExpiresIn: null, // TODO: compute from card TTL
+            lastChecked: new Date().toISOString(),
+        };
+    }
+    catch {
+        return { pendingIntros: 0, highConfidenceMatches: 0, networkSize: 0, cardStatus: "unknown", lastChecked: new Date().toISOString() };
+    }
+}
+// Inject _digest into any tool result text
+function withDigest(resultObj, digest) {
+    return JSON.stringify({ ...resultObj, _digest: digest }, null, 2);
+}
 async function api(path, opts) {
     const res = await fetch(`${API}${path}`, {
         ...opts,
@@ -48,23 +72,17 @@ const server = new McpServer({
 // ══════════════════════════════════════
 // Tool 1: publish_intent_card
 // ══════════════════════════════════════
-const needOfferSchema = z.object({
-    category: z.string().describe("Category (e.g. 'engineering', 'design', 'funding', 'marketing')"),
-    description: z.string().describe("What is needed or offered"),
-    priority: z.enum(["critical", "high", "medium", "low"]).default("medium"),
-    tags: z.array(z.string()).optional().describe("Tags for matching"),
-});
-server.tool("publish_intent_card", "Publish what you need and offer to the Mingle network. Other agents will match against your card. Cards are signed and expire automatically.", {
+server.tool("publish_intent_card", "Publish what you need and offer to the Mingle network. Accepts plain text needs/offers. Cards are Ed25519 signed with your persistent identity.", {
     name: z.string().describe("Your name or alias"),
-    needs: z.array(needOfferSchema).optional().describe("What you're looking for"),
-    offers: z.array(needOfferSchema).optional().describe("What you can provide"),
+    topic: z.string().optional().describe("What you're working on (short summary)"),
+    needs: z.array(z.string()).optional().describe("What you're looking for (plain text list)"),
+    offers: z.array(z.string()).optional().describe("What you can provide (plain text list)"),
+    context: z.string().optional().describe("Rich context for better matching (private — never shown to others)"),
     open_to: z.array(z.string()).optional().describe("Open to (e.g. 'introductions', 'partnerships')"),
-    not_open_to: z.array(z.string()).optional().describe("Not open to (e.g. 'cold-sales', 'recruitment-spam')"),
-    hours: z.number().default(24).describe("Hours until card expires"),
+    hours: z.number().default(48).describe("Hours until card expires (default 48)"),
 }, async (args) => {
-    // Input validation — prevent bloat attacks
-    const MAX_FIELD_LEN = 500;
-    const MAX_ITEMS = 10;
+    const MAX_FIELD_LEN = 200;
+    const MAX_ITEMS = 5;
     if (args.name.length > 100)
         return { content: [{ type: "text", text: "Name too long (max 100 chars)" }], isError: true };
     if ((args.needs?.length || 0) > MAX_ITEMS)
@@ -72,48 +90,53 @@ server.tool("publish_intent_card", "Publish what you need and offer to the Mingl
     if ((args.offers?.length || 0) > MAX_ITEMS)
         return { content: [{ type: "text", text: `Too many offers (max ${MAX_ITEMS})` }], isError: true };
     for (const item of [...(args.needs || []), ...(args.offers || [])]) {
-        if (item.description.length > MAX_FIELD_LEN)
-            return { content: [{ type: "text", text: `Description too long (max ${MAX_FIELD_LEN} chars)` }], isError: true };
+        if (item.length > MAX_FIELD_LEN)
+            return { content: [{ type: "text", text: `Item too long (max ${MAX_FIELD_LEN} chars)` }], isError: true };
     }
-    agentId = `mingle-${args.name.toLowerCase().replace(/[^a-z0-9]/g, '-')}`;
-    const mapItem = (item) => ({
-        category: item.category,
-        description: item.description,
-        priority: item.priority || "medium",
-        tags: item.tags || [],
-        visibility: "public",
-    });
-    const card = createIntentCard({
+    if (args.context && args.context.length > 1000)
+        return { content: [{ type: "text", text: "Context too long (max 1000 chars)" }], isError: true };
+    // Build card manually (not via createIntentCard) so signature covers all fields
+    const card = {
+        cardId: `card-${agentId}-${Date.now()}`,
         agentId,
-        principalAlias: args.name,
         publicKey: keys.publicKey,
-        privateKey: keys.privateKey,
-        needs: (args.needs || []).map(mapItem),
-        offers: (args.offers || []).map(mapItem),
-        openTo: args.open_to || [],
-        notOpenTo: args.not_open_to || [],
-        ttlSeconds: (args.hours || 24) * 3600,
-    });
+        principalAlias: args.name,
+        topic: args.topic || "",
+        needs: (args.needs || []).map(desc => ({ description: desc, category: "general" })),
+        offers: (args.offers || []).map(desc => ({ description: desc, category: "general" })),
+        openTo: args.open_to || ["introductions", "collaboration"],
+        context: args.context || "",
+        provenance: "explicit",
+        confidence: 1.0,
+        source: "organic",
+        expiresAt: new Date(Date.now() + (args.hours || 48) * 3600 * 1000).toISOString(),
+        createdAt: new Date().toISOString(),
+    };
+    // Sign the full card (API strips signature, canonicalizes rest, verifies)
+    card.signature = sign(canonicalize(card), keys.privateKey);
     try {
-        const result = await api("/api/cards", {
-            method: "POST",
-            body: JSON.stringify({ ...card, publicKey: keys.publicKey, signature: card.signature }),
-        });
+        const result = await api("/api/cards", { method: "POST", body: JSON.stringify(card) });
         if (result.error)
             return { content: [{ type: "text", text: `Failed: ${result.error}` }], isError: true };
+        // Cache card locally for offline resilience
+        cacheCard({ cardId: result.cardId, topic: args.topic, needs: args.needs, offers: args.offers, expiresAt: result.expiresAt });
+        const digest = await fetchDigest();
         return {
             content: [{
                     type: "text",
-                    text: JSON.stringify({
+                    text: withDigest({
                         published: true,
                         cardId: result.cardId,
                         name: args.name,
+                        topic: args.topic,
                         needs: (args.needs || []).length,
                         offers: (args.offers || []).length,
                         expiresAt: result.expiresAt,
                         networkSize: result.networkSize,
-                        note: "Card published to Mingle network. Use search_matches to find relevant people.",
-                    }, null, 2),
+                        topMatches: [],
+                        matchingVersion: "pending-1b",
+                        note: "Card published. Semantic matching coming in next update.",
+                    }, digest),
                 }],
         };
     }
@@ -137,10 +160,11 @@ server.tool("search_matches", "Find people relevant to you on the Mingle network
         const result = await api(`/api/matches/${agentId}?${params}`);
         if (result.error)
             return { content: [{ type: "text", text: result.error }], isError: true };
+        const digest = await fetchDigest();
         return {
             content: [{
                     type: "text",
-                    text: JSON.stringify({
+                    text: withDigest({
                         matchCount: result.matchCount,
                         totalPeople: result.totalCandidates,
                         matches: (result.matches || []).map((m) => ({
@@ -150,7 +174,7 @@ server.tool("search_matches", "Find people relevant to you on the Mingle network
                             mutual: m.mutual,
                             explanation: sanitize(m.explanation),
                         })),
-                    }, null, 2),
+                    }, digest),
                 }],
         };
     }
@@ -169,7 +193,7 @@ server.tool("get_digest", "What matters to you right now? Returns your top match
         return {
             content: [{
                     type: "text",
-                    text: JSON.stringify({
+                    text: withDigest({
                         summary: d.summary,
                         networkSize: d.networkSize,
                         hasCard: d.hasCard,
@@ -186,7 +210,14 @@ server.tool("get_digest", "What matters to you right now? Returns your top match
                             message: sanitize(i.message),
                         })),
                         note: !d.hasCard ? "No card published yet. Use publish_intent_card to join the network." : undefined,
-                    }, null, 2),
+                    }, {
+                        pendingIntros: (d.introsReceived || []).length,
+                        highConfidenceMatches: (d.matches || []).length,
+                        networkSize: d.networkSize || 0,
+                        cardStatus: d.hasCard ? "active" : "none",
+                        cardExpiresIn: null,
+                        lastChecked: new Date().toISOString(),
+                    }),
                 }],
         };
     }
@@ -203,29 +234,31 @@ server.tool("request_intro", "Propose an introduction to someone you matched wit
     message: z.string().describe("Short message explaining why this intro would be valuable"),
 }, async (args) => {
     try {
+        const introBody = {
+            matchId: args.match_id,
+            targetAgentId: args.to,
+            message: args.message,
+            fieldsToDisclose: ["needs", "offers"],
+            agentId,
+            publicKey: keys.publicKey,
+        };
+        introBody.signature = sign(canonicalize(introBody), keys.privateKey);
         const result = await api("/api/intros", {
             method: "POST",
-            body: JSON.stringify({
-                matchId: args.match_id,
-                targetAgentId: args.to,
-                message: args.message,
-                fieldsToDisclose: ["needs", "offers"],
-                agentId,
-                publicKey: keys.publicKey,
-                signature: sign(args.match_id + args.message, keys.privateKey),
-            }),
+            body: JSON.stringify(introBody),
         });
         if (result.error)
             return { content: [{ type: "text", text: `Failed: ${result.error}` }], isError: true };
+        const digest = await fetchDigest();
         return {
             content: [{
                     type: "text",
-                    text: JSON.stringify({
+                    text: withDigest({
                         introId: result.introId,
                         status: "pending",
                         to: args.to,
                         note: "Intro request sent. They'll see it in their digest.",
-                    }, null, 2),
+                    }, digest),
                 }],
         };
     }
@@ -242,26 +275,28 @@ server.tool("respond_to_intro", "Respond to an introduction request. Approve to 
     message: z.string().optional().describe("Optional response message"),
 }, async (args) => {
     try {
+        const respondBody = {
+            verdict: args.approve ? "approve" : "decline",
+            message: args.message,
+            agentId,
+            publicKey: keys.publicKey,
+        };
+        respondBody.signature = sign(canonicalize(respondBody), keys.privateKey);
         const result = await api(`/api/intros/${args.intro_id}`, {
             method: "PUT",
-            body: JSON.stringify({
-                verdict: args.approve ? "approve" : "decline",
-                message: args.message,
-                agentId,
-                publicKey: keys.publicKey,
-                signature: sign(args.intro_id + (args.approve ? "approve" : "decline"), keys.privateKey),
-            }),
+            body: JSON.stringify(respondBody),
         });
         if (result.error)
             return { content: [{ type: "text", text: `Failed: ${result.error}` }], isError: true };
+        const digest = await fetchDigest();
         return {
             content: [{
                     type: "text",
-                    text: JSON.stringify({
+                    text: withDigest({
                         introId: args.intro_id,
                         approved: args.approve,
                         note: args.approve ? "Connected. Both sides can now see each other's info." : "Declined.",
-                    }, null, 2),
+                    }, digest),
                 }],
         };
     }
@@ -276,22 +311,25 @@ server.tool("remove_intent_card", "Remove your card from the network. Use when y
     card_id: z.string().describe("Card ID to remove"),
 }, async (args) => {
     try {
+        const removeBody = {
+            agentId,
+            publicKey: keys.publicKey,
+        };
+        removeBody.signature = sign(canonicalize(removeBody), keys.privateKey);
         const result = await api(`/api/cards/${args.card_id}`, {
             method: "DELETE",
-            body: JSON.stringify({
-                agentId,
-                publicKey: keys.publicKey,
-                signature: sign(args.card_id, keys.privateKey),
-            }),
+            body: JSON.stringify(removeBody),
         });
+        clearCachedCard();
+        const digest = await fetchDigest();
         return {
             content: [{
                     type: "text",
-                    text: JSON.stringify({
+                    text: withDigest({
                         removed: result.removed || false,
                         cardId: args.card_id,
                         error: result.error,
-                    }, null, 2),
+                    }, digest),
                 }],
         };
     }
