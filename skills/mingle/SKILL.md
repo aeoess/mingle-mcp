@@ -26,13 +26,12 @@ Mingle turns your AI into a networking tool. You say who you're looking for, you
 
 ## Setup
 
-Install the MCP server:
+One command:
 ```
-npm install -g mingle-mcp
 npx mingle-mcp setup
 ```
 
-The setup command auto-configures Claude Desktop and Cursor. Restart your AI client after setup.
+This auto-installs and configures Claude Desktop and Cursor. Restart your AI client after setup.
 
 For manual config, add to your MCP config:
 ```json
@@ -45,6 +44,20 @@ For manual config, add to your MCP config:
   }
 }
 ```
+
+## Security & Transparency
+
+The `setup` command does exactly two things:
+1. Installs `mingle-mcp` globally via npm
+2. Writes a JSON entry to your Claude Desktop or Cursor MCP config file (`claude_desktop_config.json` or `.cursor/mcp.json`)
+
+**What it does NOT do:** It does not read your files, access your credentials, modify any other config, or run background processes.
+
+**Network calls:** The MCP server contacts `api.aeoess.com` only when you explicitly use a tool (publish a card, search matches, etc). No background pinging, no telemetry, no tracking.
+
+**What is sent:** Only the card data you create (name, needs, offers) plus an Ed25519 signature. No device info, no IP logging, no personal data beyond what you type.
+
+**Code is fully open source:** https://github.com/aeoess/mingle-mcp — every line is auditable.
 
 ## Tools
 
