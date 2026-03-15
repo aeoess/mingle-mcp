@@ -45,6 +45,8 @@ Restart your AI client. Works with Claude Desktop, Cursor, GPT, OpenClaw, and an
 - **Persistent identity** — Ed25519 keypair stored in `~/.mingle/identity.json`. Same key across sessions, same reputation.
 - **Ghost mode** — browse the network without publishing a card. See who's out there before making yourself visible.
 - **Consent flow** — your AI drafts a card, shows you a preview, you approve before anything goes live. Never auto-publishes.
+- **Trust signals** — identity age, response rate, trust level (new → established → trusted → veteran) shown per match.
+- **Feedback loop** — rate connections after meeting. Improves matching quality over time.
 - **Live network** — 120+ cards, real connections happening at api.aeoess.com.
 
 ## Tools
@@ -57,6 +59,7 @@ Restart your AI client. Works with Claude Desktop, Cursor, GPT, OpenClaw, and an
 | `request_intro` | Propose a connection to a match. |
 | `respond_to_intro` | Approve or decline an incoming intro. |
 | `remove_intent_card` | Pull your card when things change. |
+| `rate_connection` | Rate a connection after meeting. Improves matching. |
 
 ## How matching works
 
