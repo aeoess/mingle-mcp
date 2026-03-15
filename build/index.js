@@ -72,7 +72,7 @@ const server = new McpServer({
 // ══════════════════════════════════════
 // Tool 1: publish_intent_card
 // ══════════════════════════════════════
-server.tool("publish_intent_card", "Publish what you need and offer to the Mingle network. Accepts plain text needs/offers. Cards are Ed25519 signed with your persistent identity.", {
+server.tool("publish_intent_card", "Publish your profile to the Mingle network — what you're looking for and what you can offer. Cards are Ed25519 signed with your persistent identity and expire after 48h. Returns your top matches immediately.", {
     name: z.string().describe("Your name or alias"),
     topic: z.string().optional().describe("What you're working on (short summary)"),
     needs: z.array(z.string()).optional().describe("What you're looking for (plain text list)"),
@@ -147,17 +147,34 @@ server.tool("publish_intent_card", "Publish what you need and offer to the Mingl
 // ══════════════════════════════════════
 // Tool 2: search_matches
 // ══════════════════════════════════════
-server.tool("search_matches", "Find people relevant to you on the Mingle network. Returns ranked matches based on how well your needs align with their offers and vice versa.", {
-    min_score: z.number().optional().describe("Minimum relevance score (default: 0)"),
-    max_results: z.number().optional().describe("Max results (default: 10)"),
+server.tool("search_matches", "Find people relevant to you on the Mingle network. Works even without a published card (ghost mode): provide what you're looking for and browse anonymously. Returns ranked matches based on semantic similarity between needs and offers.", {
+    min_score: z.number().optional().describe("Minimum relevance score 0-1 (default: 0.3)"),
+    max_results: z.number().optional().describe("Max results (default: 15)"),
+    query_needs: z.array(z.string()).optional().describe("Ghost mode: describe what you need without a published card"),
+    query_offers: z.array(z.string()).optional().describe("Ghost mode: describe what you offer without a published card"),
 }, async (args) => {
     try {
-        const params = new URLSearchParams();
-        if (args.min_score)
-            params.set("minScore", String(args.min_score));
-        if (args.max_results)
-            params.set("max", String(args.max_results));
-        const result = await api(`/api/matches/${agentId}?${params}`);
+        let result;
+        // Ghost mode: search without a published card
+        if (args.query_needs?.length || args.query_offers?.length) {
+            result = await api("/api/matches/ghost", {
+                method: "POST",
+                body: JSON.stringify({
+                    needs: (args.query_needs || []).map(d => ({ description: d })),
+                    offers: (args.query_offers || []).map(d => ({ description: d })),
+                    max: args.max_results || 15,
+                }),
+            });
+        }
+        else {
+            // Normal mode: search against published card
+            const params = new URLSearchParams();
+            if (args.min_score)
+                params.set("minScore", String(args.min_score));
+            if (args.max_results)
+                params.set("max", String(args.max_results));
+            result = await api(`/api/matches/${agentId}?${params}`);
+        }
         if (result.error)
             return { content: [{ type: "text", text: result.error }], isError: true };
         const digest = await fetchDigest();
@@ -185,7 +202,7 @@ server.tool("search_matches", "Find people relevant to you on the Mingle network
 // ══════════════════════════════════════
 // Tool 3: get_digest
 // ══════════════════════════════════════
-server.tool("get_digest", "What matters to you right now? Returns your top matches, pending intros you've sent, and incoming intro requests. One call, everything relevant.", {}, async () => {
+server.tool("get_digest", "Check what's happening on the Mingle network for you. Returns pending intro requests, top matches, and card status. Call this at session start to surface anything important.", {}, async () => {
     try {
         const d = await api(`/api/digest/${agentId}`);
         if (d.error)
@@ -228,7 +245,7 @@ server.tool("get_digest", "What matters to you right now? Returns your top match
 // ══════════════════════════════════════
 // Tool 4: request_intro
 // ══════════════════════════════════════
-server.tool("request_intro", "Propose an introduction to someone you matched with. They'll see your message and can approve or decline. Nothing happens without both sides saying yes.", {
+server.tool("request_intro", "Reach out to someone you matched with on Mingle. Send a message explaining why you'd be a good connection. Nothing personal crosses until both sides say yes.", {
     match_id: z.string().describe("Match ID from search_matches"),
     to: z.string().describe("Agent ID of the person you want to meet"),
     message: z.string().describe("Short message explaining why this intro would be valuable"),
@@ -269,7 +286,7 @@ server.tool("request_intro", "Propose an introduction to someone you matched wit
 // ══════════════════════════════════════
 // Tool 5: respond_to_intro
 // ══════════════════════════════════════
-server.tool("respond_to_intro", "Respond to an introduction request. Approve to connect, or decline. Your choice.", {
+server.tool("respond_to_intro", "Respond to an introduction on Mingle. Someone's AI reached out because they think you'd be a good match. Approve to connect, decline to pass. No details shared unless both sides say yes.", {
     intro_id: z.string().describe("Intro ID from your digest"),
     approve: z.boolean().describe("true to approve, false to decline"),
     message: z.string().optional().describe("Optional response message"),
@@ -307,7 +324,7 @@ server.tool("respond_to_intro", "Respond to an introduction request. Approve to 
 // ══════════════════════════════════════
 // Tool 6: remove_intent_card
 // ══════════════════════════════════════
-server.tool("remove_intent_card", "Remove your card from the network. Use when your situation changed. Publish a new one when ready.", {
+server.tool("remove_intent_card", "Remove your card from the Mingle network. Your identity and connection history are preserved. Publish a fresh card anytime.", {
     card_id: z.string().describe("Card ID to remove"),
 }, async (args) => {
     try {
