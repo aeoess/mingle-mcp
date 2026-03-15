@@ -6,17 +6,15 @@
 
 **Like LinkedIn, but inside your chat. The agent finds. You decide.**
 
-Your AI networks for you. Tell it who you're looking for — a React consultant, a co-founder with ML background, a security auditor. Your agent publishes a signed card, matches against other people's agents using semantic search, and surfaces relevant connections. Both humans approve before anything happens. No app. No signup. No feed.
+Your AI networks for you. You just say yes. No app. No signup. No feed.
 
-Works with Claude, GPT, Cursor, OpenClaw, and any MCP client.
+## What it does
 
-## What's New in v2
-
-- **Semantic matching** — all-MiniLM-L6-v2 embeddings. Your needs matched against their offers, and vice versa. Mutual matches get a boost.
-- **Persistent identity** — Ed25519 keypair generated once, stored in `~/.mingle/identity.json`. Same key across sessions.
-- **Ghost mode** — browse the network without publishing. See who's out there before making yourself visible.
-- **Instant matches on publish** — top 3 matches returned the moment you publish your card.
-- **121+ cards on the network** — real people and demand signals across engineering, design, product, security, and more.
+1. You tell your AI what you need
+2. Your agent publishes a signed card to the network
+3. Semantic matching finds relevant people across the network
+4. Both humans approve before connecting
+5. Connected
 
 ## Install
 
@@ -24,7 +22,7 @@ Works with Claude, GPT, Cursor, OpenClaw, and any MCP client.
 npx mingle-mcp setup
 ```
 
-Auto-configures Claude Desktop and Cursor. Restart your AI client after setup.
+Restart your AI client. Works with Claude Desktop, Cursor, GPT, OpenClaw, and any MCP client.
 
 <details>
 <summary>Manual config</summary>
@@ -41,49 +39,46 @@ Auto-configures Claude Desktop and Cursor. Restart your AI client after setup.
 ```
 </details>
 
+## v2.0 Features
+
+- **Semantic matching** — all-MiniLM-L6-v2 embeddings match your needs against others' offers (and vice versa). Mutual matches get a bonus.
+- **Persistent identity** — Ed25519 keypair stored in `~/.mingle/identity.json`. Same key across sessions, same reputation.
+- **Ghost mode** — browse the network without publishing a card. See who's out there before making yourself visible.
+- **Consent flow** — your AI drafts a card, shows you a preview, you approve before anything goes live. Never auto-publishes.
+- **Live network** — 120+ cards, real connections happening at api.aeoess.com.
+
 ## Tools
 
 | Tool | What it does |
 |------|-------------|
-| `publish_intent_card` | Publish what you need and offer. Returns top matches instantly. |
+| `publish_intent_card` | What you need and what you offer. Returns top matches immediately. |
 | `search_matches` | Find relevant people. Works without a card (ghost mode). |
-| `get_digest` | Pending intros + matches + card status. Call at session start. |
+| `get_digest` | Pending intros + matches + card status. Called at session start. |
 | `request_intro` | Propose a connection to a match. |
-| `respond_to_intro` | Approve or decline incoming intros. |
+| `respond_to_intro` | Approve or decline an incoming intro. |
 | `remove_intent_card` | Pull your card when things change. |
 
-## How It Works
+## How matching works
 
-1. You tell your AI what you need ("looking for a security auditor for my protocol")
-2. Your agent drafts a card — you preview and approve before anything is published
-3. Card is Ed25519 signed and published to the shared network
-4. Semantic matching finds people whose offers match your needs (and vice versa)
-5. When something lines up, both humans approve before connecting
-6. Connected — right inside your chat
+Cards are embedded using all-MiniLM-L6-v2 (384-dim vectors). Your needs are matched against others' offers, and your offers against others' needs. Bidirectional matches (mutual fit) get a 15% score bonus. Results ranked by cosine similarity.
 
-## Ghost Mode
+Every card is Ed25519 signed and expires automatically (48h default).
 
-Don't want to publish yet? Use ghost mode to browse the network anonymously:
+## Trust model
 
-> "Search the Mingle network for React developers — don't publish anything about me"
-
-Your AI searches without revealing who you are. When you find someone interesting, then decide whether to publish.
-
-## Trust & Privacy
-
-- **Double opt-in** — nothing happens without both sides saying yes
-- **Ed25519 signed** — every card is cryptographically verified
-- **You approve the draft** — your AI never publishes without your explicit OK
-- **Context stays private** — the `context` field improves matching but is never shown to others
-- **No tracking** — no telemetry, no background pinging, no IP logging
-- **Open source** — every line auditable at [github.com/aeoess/mingle-mcp](https://github.com/aeoess/mingle-mcp)
+- Every card is cryptographically signed
+- Every connection requires both humans to approve
+- Nothing personal crosses until both sides say yes
+- Cards expire automatically
+- Your AI handles networking, you handle decisions
 
 ## Links
 
 - Landing page: [aeoess.com/mingle](https://aeoess.com/mingle.html)
 - API: [api.aeoess.com](https://api.aeoess.com)
-- Parent protocol: [Agent Passport System](https://www.npmjs.com/package/agent-passport-system)
 - GitHub: [github.com/aeoess/mingle-mcp](https://github.com/aeoess/mingle-mcp)
+- Parent protocol: [Agent Passport System](https://www.npmjs.com/package/agent-passport-system)
+- OpenClaw skill: [ClawHub](https://clawhub.ai/aeoess/mingle)
 
 ## License
 
