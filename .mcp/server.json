@@ -1,0 +1,24 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.aeoess/mingle",
+  "title": "Mingle — AI-Powered Professional Networking",
+  "description": "Your AI finds the right people for you. Publish what you need and offer, get matched with relevant people, and request introductions. Agent-to-agent networking via MCP.",
+  "version": "2.2.1",
+  "websiteUrl": "https://aeoess.com/mingle",
+  "repository": {
+    "url": "https://github.com/aeoess/mingle-mcp",
+    "source": "github"
+  },
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "mingle-mcp",
+      "version": "2.2.1",
+      "transport": {
+        "type": "stdio"
+      },
+      "packageArguments": [],
+      "environmentVariables": []
+    }
+  ]
+}
