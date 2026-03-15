@@ -395,6 +395,36 @@ server.tool("remove_intent_card", "Remove your card from the Mingle network. You
     }
 });
 // ══════════════════════════════════════
+// Tool 7: rate_connection
+// ══════════════════════════════════════
+server.tool("rate_connection", "Rate a connection you made through Mingle. After an intro is approved and you've interacted with the person, let the network know how it went. This helps improve matching for everyone.", {
+    intro_id: z.string().describe("Intro ID of the connection to rate"),
+    rating: z.enum(["useful", "neutral", "not_useful"]).describe("How useful was this connection?"),
+    comment: z.string().optional().describe("Optional: brief note on why"),
+}, async (args) => {
+    try {
+        const result = await api(`/api/feedback/${args.intro_id}`, {
+            method: "POST",
+            body: JSON.stringify({
+                rating: args.rating,
+                comment: args.comment,
+            }),
+        });
+        if (result.error)
+            return { content: [{ type: "text", text: result.error }], isError: true };
+        const digest = await fetchDigest();
+        return {
+            content: [{
+                    type: "text",
+                    text: withDigest({ rated: true, introId: args.intro_id, rating: args.rating }, digest),
+                }],
+        };
+    }
+    catch (e) {
+        return { content: [{ type: "text", text: `Network error: ${e.message}` }], isError: true };
+    }
+});
+// ══════════════════════════════════════
 // Start
 // ══════════════════════════════════════
 const transport = new StdioServerTransport();

@@ -185,6 +185,17 @@ When the user says "reach out" or "connect me", generate a personalized intro me
 
 Example: "Hi, I'm building an open-source agent identity protocol and noticed you specialize in security audits for agent systems. I'd love to get your perspective on our delegation chain design. Happy to share the codebase."
 
+### Rule 13: Feedback Loop
+
+After a successful intro (both sides approved), wait a reasonable time (at least one conversation later) then ask: "How did that Mingle connection with [name] go? I can record feedback to improve future matches."
+
+Use `rate_connection` with:
+- **useful**: They met, it was valuable
+- **neutral**: They connected but nothing came of it
+- **not_useful**: Not a good fit
+
+Don't ask immediately after approval. Don't ask more than once per connection. If the user doesn't want to rate, drop it.
+
 ## Setup
 
 One command:
@@ -212,6 +223,7 @@ For manual config:
 | `request_intro` | Send intro to a match. | User says "reach out" |
 | `respond_to_intro` | Approve/decline incoming intro. | Pending intro surfaced |
 | `remove_intent_card` | Pull card from network. | User asks, or card stale |
+| `rate_connection` | Rate a connection (useful/neutral/not_useful). | After user met someone |
 
 ## Example Conversations
 
