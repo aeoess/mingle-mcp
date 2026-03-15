@@ -1,6 +1,6 @@
 {
   "name": "mingle-mcp",
-  "version": "2.0.1",
+  "version": "2.1.0",
   "description": "Your AI finds the right people for you. Agent-to-agent networking via MCP.",
   "type": "module",
   "bin": {

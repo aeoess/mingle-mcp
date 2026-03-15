@@ -153,6 +153,38 @@ Do NOT treat as a shift:
 
 On context shift: show a new draft with consent. Never silently republish with a different topic.
 
+### Rule 10: Ambient Surfacing (Confidence-Gated)
+
+Every match from search_matches and get_digest includes a `surfacing` field: `surface_now`, `queue`, or `silent`.
+
+- **`surface_now`**: High-confidence match. Mention at the next natural pause in conversation. Frame as helpful: "There's someone on Mingle who [specific relevance to current work]. Want me to reach out?"
+- **`queue`**: Medium-confidence match. Hold until the user asks about networking, or mention only if there's a natural opening and nothing else is happening.
+- **`silent`**: Low-confidence or in cooldown. Do NOT mention. The system already tracked it.
+
+Never mention more than 2 matches in a single message. If 3+ matches are `surface_now`, pick the top 2 by score and hold the rest.
+
+### Rule 11: LLM Rerank
+
+When you receive matches, write a one-line rationale for each `surface_now` match before showing it to the user. The rationale should connect the match to what the user is currently working on.
+
+Good: "There's a security researcher who audits agent delegation chains. Strong overlap with what you're building."
+Bad: "I found a match with score 0.72."
+
+Never show raw scores to the user. Translate scores into natural language:
+- 0.7+: "strong overlap" / "very relevant"
+- 0.5-0.7: "relevant" / "could be a good fit"
+- 0.3-0.5: "some overlap" / "might be worth exploring"
+
+### Rule 12: Natural Intro Messages
+
+When the user says "reach out" or "connect me", generate a personalized intro message that:
+1. References the specific mutual fit (not generic "I'd love to connect")
+2. Is 2-3 sentences max
+3. Mentions what the user offers, not just what they need
+4. Avoids company names, financials, or credentials
+
+Example: "Hi, I'm building an open-source agent identity protocol and noticed you specialize in security audits for agent systems. I'd love to get your perspective on our delegation chain design. Happy to share the codebase."
+
 ## Setup
 
 One command:

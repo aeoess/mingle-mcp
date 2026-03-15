@@ -9,12 +9,13 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import { sign, canonicalize } from "agent-passport-system";
-import { loadIdentity, cacheCard, clearCachedCard } from "./identity.js";
+import { loadIdentity, loadPreferences, cacheCard, clearCachedCard, classifyMatches, recordSurfaced } from "./identity.js";
 
 const API = process.env.MINGLE_API_URL || "https://api.aeoess.com";
 
 // Persistent identity — loaded from ~/.mingle/identity.json
 const identity = loadIdentity();
+const prefs = loadPreferences();
 const keys = { publicKey: identity.publicKey, privateKey: identity.privateKey };
 let agentId = identity.principalId;
 
@@ -40,16 +41,30 @@ async function fetchDigest(): Promise<any> {
     const d = await fetch(`${API}/api/digest/${agentId}`, {
       headers: { "X-Agent-Id": agentId, "X-Public-Key": keys.publicKey },
     }).then(r => r.json());
+
+    const rawMatches = d.matches || [];
+    const classified = classifyMatches(rawMatches, prefs.mode);
+    const surfaceNow = classified.filter((m: any) => m.surfacing === "surface_now");
+    const queued = classified.filter((m: any) => m.surfacing === "queue");
+
     return {
       pendingIntros: (d.introsReceived || []).length,
-      highConfidenceMatches: (d.matches || []).length,
+      introsReceived: (d.introsReceived || []).map((i: any) => ({
+        introId: i.intro_id, from: sanitize(i.requested_by), message: sanitize(i.message),
+      })),
+      matches: {
+        total: rawMatches.length,
+        surfaceNow: surfaceNow.length,
+        queued: queued.length,
+        topMatch: surfaceNow[0] ? { name: sanitize(surfaceNow[0].name), score: surfaceNow[0].score, mutual: surfaceNow[0].mutual, why: surfaceNow[0].needMatch || surfaceNow[0].offerMatch } : null,
+      },
       networkSize: d.networkSize || 0,
       cardStatus: d.hasCard ? "active" : "none",
-      cardExpiresIn: null, // TODO: compute from card TTL
+      mode: prefs.mode,
       lastChecked: new Date().toISOString(),
     };
   } catch {
-    return { pendingIntros: 0, highConfidenceMatches: 0, networkSize: 0, cardStatus: "unknown", lastChecked: new Date().toISOString() };
+    return { pendingIntros: 0, matches: { total: 0, surfaceNow: 0, queued: 0, topMatch: null }, networkSize: 0, cardStatus: "unknown", lastChecked: new Date().toISOString() };
   }
 }
 
@@ -145,9 +160,16 @@ server.tool(
             offers: (args.offers || []).length,
             expiresAt: result.expiresAt,
             networkSize: result.networkSize,
-            topMatches: [],
-            matchingVersion: "pending-1b",
-            note: "Card published. Semantic matching coming in next update.",
+            topMatches: classifyMatches(result.topMatches || [], prefs.mode).slice(0, 3).map((m: any) => ({
+              name: sanitize(m.name || m.agentId),
+              score: m.score,
+              mutual: m.mutual,
+              confidence: m.confidence,
+              surfacing: m.surfacing,
+              needMatch: sanitize(m.needMatch),
+              offerMatch: sanitize(m.offerMatch),
+            })),
+            matchingVersion: result.matchingVersion || "semantic-v1",
           }, digest),
         }],
       };
@@ -194,6 +216,14 @@ server.tool(
 
       if (result.error) return { content: [{ type: "text" as const, text: result.error }], isError: true };
 
+      // Classify matches with confidence + surfacing metadata
+      const classified = classifyMatches(result.matches || [], prefs.mode);
+
+      // Record surfaced matches for cooldown tracking
+      for (const m of classified.filter((c: any) => c.surfacing === "surface_now")) {
+        recordSurfaced(m.agentId);
+      }
+
       const digest = await fetchDigest();
       return {
         content: [{
@@ -201,12 +231,16 @@ server.tool(
           text: withDigest({
             matchCount: result.matchCount,
             totalPeople: result.totalCandidates,
-            matches: (result.matches || []).map((m: any) => ({
-              matchId: m.matchId,
-              person: m.agentA === agentId ? m.agentB : m.agentA,
+            matches: classified.map((m: any) => ({
+              matchId: m.matchId || `match_${m.agentId}`,
+              agentId: m.agentId,
+              name: sanitize(m.name),
               score: m.score,
               mutual: m.mutual,
-              explanation: sanitize(m.explanation),
+              confidence: m.confidence,
+              surfacing: m.surfacing,
+              needMatch: sanitize(m.needMatch),
+              offerMatch: sanitize(m.offerMatch),
             })),
           }, digest),
         }],
@@ -230,6 +264,16 @@ server.tool(
       const d = await api(`/api/digest/${agentId}`);
       if (d.error) return { content: [{ type: "text" as const, text: d.error }], isError: true };
 
+      // Classify matches with confidence + surfacing
+      const classified = classifyMatches(d.matches || [], prefs.mode);
+      const surfaceNow = classified.filter((m: any) => m.surfacing === "surface_now");
+      const queued = classified.filter((m: any) => m.surfacing === "queue");
+
+      // Record surfaced matches for cooldown
+      for (const m of surfaceNow) recordSurfaced(m.agentId);
+
+      const digest = await fetchDigest();
+
       return {
         content: [{
           type: "text" as const,
@@ -237,27 +281,29 @@ server.tool(
             summary: d.summary,
             networkSize: d.networkSize,
             hasCard: d.hasCard,
-            matches: (d.matches || []).slice(0, 5).map((m: any) => ({
-              person: m.agentA === agentId ? m.agentB : m.agentA,
-              score: m.score,
-              explanation: sanitize(m.explanation),
-            })),
+            mode: prefs.mode,
+            matches: {
+              surfaceNow: surfaceNow.slice(0, 3).map((m: any) => ({
+                agentId: m.agentId,
+                name: sanitize(m.name),
+                score: m.score,
+                mutual: m.mutual,
+                confidence: m.confidence,
+                needMatch: sanitize(m.needMatch),
+                offerMatch: sanitize(m.offerMatch),
+              })),
+              queued: queued.length,
+              total: classified.length,
+            },
             introsSent: (d.introsPending || []).length,
             introsWaiting: (d.introsReceived || []).length,
             introsDetail: (d.introsReceived || []).map((i: any) => ({
-              introId: i.introId,
-              from: i.requestedBy,
+              introId: i.introId || i.intro_id,
+              from: sanitize(i.requestedBy || i.requested_by),
               message: sanitize(i.message),
             })),
-            note: !d.hasCard ? "No card published yet. Use publish_intent_card to join the network." : undefined,
-          }, {
-            pendingIntros: (d.introsReceived || []).length,
-            highConfidenceMatches: (d.matches || []).length,
-            networkSize: d.networkSize || 0,
-            cardStatus: d.hasCard ? "active" : "none",
-            cardExpiresIn: null,
-            lastChecked: new Date().toISOString(),
-          }),
+            note: !d.hasCard ? "No card published. Use publish_intent_card or try ghost mode with search_matches." : undefined,
+          }, digest),
         }],
       };
     } catch (e: any) {

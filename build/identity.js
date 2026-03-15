@@ -80,3 +80,76 @@ export function loadPreferences() {
     return DEFAULT_PREFS;
 }
 export { MINGLE_DIR, IDENTITY_PATH };
+// ══════════════════════════════════════
+// Phase 3: Cooldown Tracking
+// Don't suggest the same person twice within 48h
+// ══════════════════════════════════════
+const COOLDOWNS_PATH = join(MINGLE_DIR, "cooldowns.json");
+const COOLDOWN_HOURS = 48;
+function loadCooldowns() {
+    ensureDir();
+    if (existsSync(COOLDOWNS_PATH)) {
+        try {
+            return JSON.parse(readFileSync(COOLDOWNS_PATH, "utf-8"));
+        }
+        catch {
+            return {};
+        }
+    }
+    return {};
+}
+function saveCooldowns(map) {
+    ensureDir();
+    writeFileSync(COOLDOWNS_PATH, JSON.stringify(map, null, 2));
+}
+/** Record that a match was surfaced to the user. */
+export function recordSurfaced(agentId) {
+    const map = loadCooldowns();
+    map[agentId] = new Date().toISOString();
+    // Prune expired cooldowns
+    const cutoff = Date.now() - COOLDOWN_HOURS * 3600 * 1000;
+    for (const [k, v] of Object.entries(map)) {
+        if (new Date(v).getTime() < cutoff)
+            delete map[k];
+    }
+    saveCooldowns(map);
+}
+/** Check if a match is in cooldown (was surfaced recently). */
+export function isInCooldown(agentId) {
+    const map = loadCooldowns();
+    const ts = map[agentId];
+    if (!ts)
+        return false;
+    return Date.now() - new Date(ts).getTime() < COOLDOWN_HOURS * 3600 * 1000;
+}
+/** Filter matches through cooldown, classify confidence, add surfacing metadata. */
+export function classifyMatches(matches, mode) {
+    return matches.map(m => {
+        const cooled = isInCooldown(m.agentId);
+        const score = m.score || 0;
+        const mutual = m.mutual || false;
+        // Classify confidence
+        let confidence;
+        if (score >= 0.7 || (score >= 0.6 && mutual))
+            confidence = "high";
+        else if (score >= 0.45 || (score >= 0.35 && mutual))
+            confidence = "medium";
+        else
+            confidence = "low";
+        // Determine surfacing action based on mode + confidence + cooldown
+        let surfacing;
+        if (cooled) {
+            surfacing = "silent";
+        }
+        else if (mode === "quiet") {
+            surfacing = confidence === "high" ? "queue" : "silent";
+        }
+        else if (mode === "balanced") {
+            surfacing = confidence === "high" ? "surface_now" : confidence === "medium" ? "queue" : "silent";
+        }
+        else { // active
+            surfacing = confidence === "low" ? "queue" : "surface_now";
+        }
+        return { ...m, confidence, surfacing, inCooldown: cooled };
+    });
+}
