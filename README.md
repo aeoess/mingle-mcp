@@ -16,6 +16,10 @@ Your AI networks for you. You just say yes. No app. No signup. No feed.
 4. Both humans approve before connecting
 5. Connected
 
+<a href="https://glama.ai/mcp/servers/aeoess/mingle-mcp">
+  <img width="380" height="200" src="https://glama.ai/mcp/servers/aeoess/mingle-mcp/badge" alt="mingle-mcp MCP server" />
+</a>
+
 ## Install
 
 ```
