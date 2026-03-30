@@ -90,3 +90,8 @@ Every card is Ed25519 signed and expires automatically (48h default).
 ## License
 
 Apache-2.0
+
+## Hosted deployment
+
+A hosted deployment is available on [Fronteir AI](https://fronteir.ai/mcp/aeoess-mingle-mcp).
+
