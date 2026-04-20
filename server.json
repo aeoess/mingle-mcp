@@ -13,14 +13,15 @@
     "args": ["mingle-mcp"]
   },
   "tools": [
-    {"name": "publish_intent_card", "description": "Publish what you need and offer to the network"},
-    {"name": "search_matches", "description": "Find relevant people ranked by need/offer overlap"},
-    {"name": "get_digest", "description": "What matters to you right now? Top matches and pending intros"},
-    {"name": "request_intro", "description": "Propose a connection. Both humans must approve"},
-    {"name": "respond_to_intro", "description": "Approve or decline an introduction"},
-    {"name": "remove_intent_card", "description": "Remove your card when things change"}
+    {"name": "publish_intent_card", "description": "Publish what you need and offer to the network. Ed25519 signed, 48h TTL, returns top matches immediately"},
+    {"name": "search_matches", "description": "Find relevant people via semantic similarity. Works in ghost mode without publishing"},
+    {"name": "get_digest", "description": "Session-start check: pending intros, top matches, card status"},
+    {"name": "request_intro", "description": "Propose a connection. Double opt-in — nothing crosses until both sides approve"},
+    {"name": "respond_to_intro", "description": "Approve or decline an incoming intro request"},
+    {"name": "remove_intent_card", "description": "Remove your card. Identity and history are preserved"},
+    {"name": "rate_connection", "description": "Rate an approved connection after you've interacted. Feeds back into matching quality"}
   ],
-  "keywords": ["networking", "matching", "ai-agents", "intent-network", "introductions", "mcp"],
+  "keywords": ["networking", "matching", "ai-agents", "intent-network", "introductions", "mcp", "agent-identity"],
   "author": {
     "name": "AEOESS",
     "url": "https://aeoess.com"
