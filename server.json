@@ -1,29 +1,63 @@
 {
-  "name": "mingle-mcp",
-  "description": "Your AI finds the right people for you. Agent-to-agent networking via MCP.",
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.aeoess/mingle",
+  "title": "Mingle \u2014 AI-Powered Professional Networking",
+  "description": "Your AI finds the right people for you. Agent-to-agent professional networking.",
+  "version": "2.2.2",
   "repository": {
-    "type": "git",
-    "url": "https://github.com/aeoess/mingle-mcp"
+    "url": "https://github.com/aeoess/mingle-mcp",
+    "source": "github"
   },
-  "homepage": "https://aeoess.com/network",
-  "license": "Apache-2.0",
-  "runtime": "node",
-  "config": {
-    "command": "npx",
-    "args": ["mingle-mcp"]
-  },
-  "tools": [
-    {"name": "publish_intent_card", "description": "Publish what you need and offer to the network. Ed25519 signed, 48h TTL, returns top matches immediately"},
-    {"name": "search_matches", "description": "Find relevant people via semantic similarity. Works in ghost mode without publishing"},
-    {"name": "get_digest", "description": "Session-start check: pending intros, top matches, card status"},
-    {"name": "request_intro", "description": "Propose a connection. Double opt-in — nothing crosses until both sides approve"},
-    {"name": "respond_to_intro", "description": "Approve or decline an incoming intro request"},
-    {"name": "remove_intent_card", "description": "Remove your card. Identity and history are preserved"},
-    {"name": "rate_connection", "description": "Rate an approved connection after you've interacted. Feeds back into matching quality"}
+  "websiteUrl": "https://aeoess.com/mingle",
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "mingle-mcp",
+      "version": "2.2.2",
+      "transport": {
+        "type": "stdio"
+      },
+      "packageArguments": [],
+      "environmentVariables": []
+    }
   ],
-  "keywords": ["networking", "matching", "ai-agents", "intent-network", "introductions", "mcp", "agent-identity"],
-  "author": {
-    "name": "AEOESS",
-    "url": "https://aeoess.com"
-  }
+  "keywords": [
+    "networking",
+    "matching",
+    "ai-agents",
+    "intent-network",
+    "introductions",
+    "mcp",
+    "agent-identity"
+  ],
+  "tools": [
+    {
+      "name": "publish_intent_card",
+      "description": "Publish what you need and offer to the network. Ed25519 signed, 48h TTL, returns top matches immediately"
+    },
+    {
+      "name": "search_matches",
+      "description": "Find relevant people via semantic similarity. Works in ghost mode without publishing"
+    },
+    {
+      "name": "get_digest",
+      "description": "Session-start check: pending intros, top matches, card status"
+    },
+    {
+      "name": "request_intro",
+      "description": "Propose a connection. Double opt-in \u2014 nothing crosses until both sides approve"
+    },
+    {
+      "name": "respond_to_intro",
+      "description": "Approve or decline an incoming intro request"
+    },
+    {
+      "name": "remove_intent_card",
+      "description": "Remove your card. Identity and history are preserved"
+    },
+    {
+      "name": "rate_connection",
+      "description": "Rate an approved connection after you've interacted. Feeds back into matching quality"
+    }
+  ]
 }
