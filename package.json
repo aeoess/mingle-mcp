@@ -16,7 +16,7 @@
   "scripts": {
     "build": "tsc && chmod 755 build/bin.js build/index.js build/setup.js",
     "dev": "tsx watch src/index.ts",
-    "postinstall": "echo '\\n\ud83e\udd1d Mingle installed! Run: npx mingle-mcp setup\\n'"
+    "postinstall": "echo '\\n🤝 Mingle installed! Run: npx mingle-mcp setup\\n'"
   },
   "keywords": [
     "mcp",
@@ -44,5 +44,8 @@
     "typescript": "^5.7.0",
     "tsx": "^4.19.0",
     "@types/node": "^22.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
   }
 }
