@@ -664,6 +664,54 @@ server.tool(
 );
 
 // ══════════════════════════════════════
+// Tool: set_notifications (email notification consent)
+// ══════════════════════════════════════
+
+server.tool(
+  "set_notifications",
+  "Turn Mingle email notifications on or off. Your email is stored server-side for notifications only, verified by a confirmation link before anything sends, never shown to anyone or placed on any card, and removable anytime. Pass an email to subscribe (you will get a confirmation link), or off:true to unsubscribe. Optional prefs choose which events email you.",
+  {
+    email: z.string().email().optional().describe("Email to receive notifications; you will get a confirmation link"),
+    off: z.boolean().optional().describe("true to unsubscribe and delete your stored email"),
+    prefs: z.object({
+      intro_request: z.boolean().optional(),
+      intro_accepted: z.boolean().optional(),
+    }).optional().describe("Which events email you (default: both on)"),
+  },
+  async (args) => {
+    try {
+      if (args.off) {
+        const nonce = Math.random().toString(36).slice(2);
+        const body = { subject_key: keys.publicKey, nonce, signature: sign(`unsubscribe:${nonce}`, keys.privateKey) };
+        const result = await api("/api/v3/notifications/unsubscribe", { method: "POST", body: JSON.stringify(body) });
+        if (result.error) return { content: [{ type: "text" as const, text: `Failed: ${result.error}` }], isError: true };
+        return { content: [{ type: "text" as const, text: JSON.stringify({ unsubscribed: true, note: "Your stored email was deleted. No more Mingle notifications." }, null, 2) }] };
+      }
+      if (!args.email) {
+        return { content: [{ type: "text" as const, text: "Provide an email to subscribe, or off:true to unsubscribe." }], isError: true };
+      }
+      const nonce = Math.random().toString(36).slice(2);
+      const body: Record<string, any> = {
+        subject_key: keys.publicKey, email: args.email, nonce,
+        signature: sign(`${args.email}:${nonce}`, keys.privateKey),
+      };
+      if (args.prefs) body.prefs = args.prefs;
+      const result = await api("/api/v3/notifications/subscribe", { method: "POST", body: JSON.stringify(body) });
+      if (result.error) return { content: [{ type: "text" as const, text: `Failed: ${result.error}` }], isError: true };
+      return { content: [{ type: "text" as const, text: JSON.stringify({
+        subscribed: true,
+        verified: false,
+        note: result.email_enabled
+          ? "Check your inbox for a confirmation link. Notifications start only after you confirm. Your email is never shown to anyone."
+          : "Saved. Email delivery is not configured on the server yet, so no confirmation was sent; nothing will send until an operator enables it.",
+      }, null, 2) }] };
+    } catch (e: any) {
+      return { content: [{ type: "text" as const, text: `Network error: ${e.message}` }], isError: true };
+    }
+  },
+);
+
+// ══════════════════════════════════════
 // Start
 // ══════════════════════════════════════
 
