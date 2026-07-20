@@ -2,7 +2,7 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.aeoess/mingle",
   "title": "Mingle — Agent-Native Connection Protocol",
-  "description": "Meet the people you're looking for: collaborators, hackathon teammates, cofounders, work. Your agent composes your card, you approve every word by exact hash, and the network never scores or ranks people. 19 tools, Ed25519-signed cards, public card pages and event walls.",
+  "description": "Meet the people you're looking for. Your agent composes, you approve. Nothing scores or ranks you.",
   "version": "3.0.0",
   "repository": {
     "url": "https://github.com/aeoess/mingle-mcp",
