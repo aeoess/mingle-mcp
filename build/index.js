@@ -9,7 +9,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod";
 import { sign, canonicalize } from "agent-passport-system";
 import { loadIdentity, loadPreferences, cacheCard, clearCachedCard, classifyMatches, recordSurfaced } from "./identity.js";
-import { buildCard, cardContentHash, sealCard, explainVisibility, trackV3Card, listV3Cards } from "./v3.js";
+import { buildCard, cardContentHash, sealCard, explainVisibility, trackV3Card, listV3Cards, getLastCheck, setLastCheck } from "./v3.js";
 const SKILL_VERSION = "mingle-composer-v1";
 const API = process.env.MINGLE_API_URL || "https://api.aeoess.com";
 // Persistent identity — loaded from ~/.mingle/identity.json
@@ -560,7 +560,11 @@ server.tool("get_card_status", "Show the current server status of the v3 cards y
             rows.push({ card_id: t.card_id, card_type: t.card_type, headline: sanitize(t.headline), revocation_status: "unreachable", expires_at: null });
         }
     }
-    return { content: [{ type: "text", text: JSON.stringify({ v3_cards: rows.length, cards: rows }, null, 2) }] };
+    // Session pulse: return the previous last-check window, then stamp now, so
+    // the assistant can tell what is new since it last looked.
+    const previous_check = getLastCheck();
+    setLastCheck(new Date().toISOString());
+    return { content: [{ type: "text", text: JSON.stringify({ v3_cards: rows.length, cards: rows, previous_check }, null, 2) }] };
 });
 // ══════════════════════════════════════
 // Start

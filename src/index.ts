@@ -10,7 +10,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod";
 import { sign, canonicalize } from "agent-passport-system";
 import { loadIdentity, loadPreferences, cacheCard, clearCachedCard, classifyMatches, recordSurfaced } from "./identity.js";
-import { buildCard, cardContentHash, sealCard, explainVisibility, trackV3Card, listV3Cards, type BuildCardArgs } from "./v3.js";
+import { buildCard, cardContentHash, sealCard, explainVisibility, trackV3Card, listV3Cards, getLastCheck, setLastCheck, type BuildCardArgs } from "./v3.js";
 
 const SKILL_VERSION = "mingle-composer-v1";
 
@@ -655,7 +655,11 @@ server.tool(
         rows.push({ card_id: t.card_id, card_type: t.card_type, headline: sanitize(t.headline), revocation_status: "unreachable", expires_at: null });
       }
     }
-    return { content: [{ type: "text" as const, text: JSON.stringify({ v3_cards: rows.length, cards: rows }, null, 2) }] };
+    // Session pulse: return the previous last-check window, then stamp now, so
+    // the assistant can tell what is new since it last looked.
+    const previous_check = getLastCheck();
+    setLastCheck(new Date().toISOString());
+    return { content: [{ type: "text" as const, text: JSON.stringify({ v3_cards: rows.length, cards: rows, previous_check }, null, 2) }] };
   },
 );
 

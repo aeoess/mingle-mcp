@@ -1,5 +1,5 @@
 // ══════════════════════════════════════════════════════════════
-// Mingle v3 (client) — card build, canonical hash, exact-hash approval
+// Mingle v3 (client) - card build, canonical hash, exact-hash approval
 // ══════════════════════════════════════════════════════════════
 // The exact-content approval flow (spec invariant 4): compose returns the
 // canonical serialized card plus its sha256 approval token; publish requires
@@ -14,6 +14,7 @@ import { join } from "node:path";
 import { canonicalize, sign } from "agent-passport-system";
 const MINGLE_DIR = join(homedir(), ".mingle");
 const V3_CARDS_PATH = join(MINGLE_DIR, "v3-cards.json");
+const V3_PULSE_PATH = join(MINGLE_DIR, "v3-pulse.json");
 export const DEFAULT_TTL_DAYS = 21;
 /** Build the card object minus approval and signature, with timestamps fixed
  *  now so compose and publish agree on the exact bytes. */
@@ -91,4 +92,21 @@ export function listV3Cards() {
     catch {
         return [];
     }
+}
+/** Session-pulse last-check timestamp, stored in the local tracker dir. Reading
+ *  returns the previous value; call setLastCheck to stamp the current session. */
+export function getLastCheck() {
+    if (!existsSync(V3_PULSE_PATH))
+        return null;
+    try {
+        return JSON.parse(readFileSync(V3_PULSE_PATH, "utf-8")).last_check ?? null;
+    }
+    catch {
+        return null;
+    }
+}
+export function setLastCheck(iso) {
+    if (!existsSync(MINGLE_DIR))
+        mkdirSync(MINGLE_DIR, { recursive: true });
+    writeFileSync(V3_PULSE_PATH, JSON.stringify({ last_check: iso }, null, 2));
 }

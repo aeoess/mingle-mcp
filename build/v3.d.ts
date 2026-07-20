@@ -52,4 +52,8 @@ interface TrackedCard {
 }
 export declare function trackV3Card(entry: TrackedCard): void;
 export declare function listV3Cards(): TrackedCard[];
+/** Session-pulse last-check timestamp, stored in the local tracker dir. Reading
+ *  returns the previous value; call setLastCheck to stamp the current session. */
+export declare function getLastCheck(): string | null;
+export declare function setLastCheck(iso: string): void;
 export {};
