@@ -9,6 +9,8 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod";
 import { sign, canonicalize } from "agent-passport-system";
 import { loadIdentity, loadPreferences, cacheCard, clearCachedCard, classifyMatches, recordSurfaced } from "./identity.js";
+import { buildCard, cardContentHash, sealCard, explainVisibility, trackV3Card, listV3Cards } from "./v3.js";
+const SKILL_VERSION = "mingle-composer-v1";
 const API = process.env.MINGLE_API_URL || "https://api.aeoess.com";
 // Persistent identity — loaded from ~/.mingle/identity.json
 const identity = loadIdentity();
@@ -423,6 +425,142 @@ server.tool("rate_connection", "Rate a connection you made through Mingle. After
     catch (e) {
         return { content: [{ type: "text", text: `Network error: ${e.message}` }], isError: true };
     }
+});
+// ══════════════════════════════════════════════════════════════
+// Mingle v3 tools (publish + discover). Additive; the 7 tools above
+// keep serving the live 48h IntentCard path unchanged.
+// ══════════════════════════════════════════════════════════════
+const evidenceSchema = z.object({
+    claim: z.string().describe("The exact claim this evidence supports"),
+    source: z.enum(["principal_statement", "artifact_link", "subject_binding", "third_party_attestation"]),
+    method: z.string().describe("How it was checked, in plain words"),
+    verified_fact: z.string().describe("Precisely what is verified now, no more"),
+    date: z.string().describe("ISO date"),
+}).strict();
+const composeShape = {
+    headline: z.string().describe("Headline in the principal's voice"),
+    intents: z.array(z.enum(["meet", "collaborate", "team_up", "work", "advise", "mentor", "cofound"])).min(1),
+    seeking: z.array(z.object({ description: z.string(), topics: z.array(z.string()).optional(), engagement: z.string().optional() })).optional(),
+    offering: z.array(z.object({ description: z.string(), topics: z.array(z.string()).optional() })).optional(),
+    preferences: z.array(z.object({ key: z.string(), value: z.string() })).optional().describe("Explicit self-declared values only, never inferred traits"),
+    artifacts: z.array(evidenceSchema).optional(),
+    event_ref: z.object({ event_id: z.string(), dates: z.string().optional() }).optional(),
+    team_size_sought: z.number().int().min(1).max(100).optional(),
+    visibility: z.record(z.enum(["private", "network", "intro_request", "mutual_intro", "thread_only"])).optional().describe("Per-field audience; unlisted content fields default to network"),
+    ttl_days: z.number().int().min(1).max(60).optional().describe("Days until auto-expiry (default 21)"),
+};
+function argsToCard(cardType, a) {
+    const build = {
+        card_type: cardType, subject_key: keys.publicKey,
+        headline: a.headline, intents: a.intents, seeking: a.seeking, offering: a.offering,
+        preferences: a.preferences, artifacts: a.artifacts, event_ref: a.event_ref ?? null,
+        team_size_sought: a.team_size_sought ?? null, visibility: a.visibility, skill_version: SKILL_VERSION,
+        ttl_days: a.ttl_days,
+    };
+    return buildCard(build);
+}
+const COMPOSE_DESC = "Step 1 of publishing. Build the exact card the principal approves. Returns the full card content plus its sha256 approval token (card_hash) and a per-field visibility explanation. Nothing is published. Show the rendered card to the principal, then call the matching publish tool echoing card_hash back once they say yes.";
+for (const cardType of ["connection", "opportunity"]) {
+    server.tool(`compose_${cardType}_card`, COMPOSE_DESC, composeShape, async (a) => {
+        const card = argsToCard(cardType, a);
+        const card_hash = cardContentHash(card);
+        return { content: [{ type: "text", text: JSON.stringify({
+                        step: "preview",
+                        card,
+                        card_hash,
+                        visibility_explained: explainVisibility(card),
+                        note: `To publish, call publish_${cardType}_card with this exact card and approved_hash="${card_hash}". Any edit changes the hash and needs re-approval.`,
+                    }, null, 2) }] };
+    });
+    server.tool(`publish_${cardType}_card`, `Step 2 of publishing. Publish the ${cardType} card the principal approved in compose_${cardType}_card. Requires the exact card object and the approved_hash returned by compose; a mismatch is refused so only approved content is published.`, { card: z.any().describe("The exact card object returned by compose"), approved_hash: z.string().describe("The card_hash the principal approved") }, async (a) => {
+        try {
+            const card = a.card;
+            if (!card || card.card_type !== cardType)
+                return { content: [{ type: "text", text: `card_type must be ${cardType}` }], isError: true };
+            const recomputed = cardContentHash(card);
+            if (recomputed !== a.approved_hash) {
+                return { content: [{ type: "text", text: `Approval mismatch: the card content changed since it was approved (approved ${a.approved_hash}, now ${recomputed}). Re-run compose and re-approve.` }], isError: true };
+            }
+            const sealed = sealCard(card, keys.privateKey);
+            const result = await api("/api/v3/cards", { method: "POST", body: JSON.stringify({ card: sealed }) });
+            if (result.error)
+                return { content: [{ type: "text", text: `Failed: ${result.error}` }], isError: true };
+            trackV3Card({ card_id: result.card_id, card_type: cardType, headline: card.headline, card_hash: recomputed, published_at: new Date().toISOString() });
+            return { content: [{ type: "text", text: JSON.stringify({ published: true, card_id: result.card_id, card_hash: result.card_hash, expires_at: result.expires_at, revocation_status: result.revocation_status }, null, 2) }] };
+        }
+        catch (e) {
+            return { content: [{ type: "text", text: `Network error: ${e.message}` }], isError: true };
+        }
+    });
+}
+// ── search_cards: explicit fields plus semantic over published text ──────
+server.tool("search_cards", "Search Mingle v3 cards by explicit fields (card_type, intents, topics, engagement, location, event_ref) and, when a query is given, semantic similarity over published card text. Returns network-visible fields only; private fields never appear. Relevance ordering for your own query is search, not a judgment of people.", {
+    query: z.string().optional().describe("Free-text query for semantic ranking over published text"),
+    card_type: z.enum(["connection", "opportunity"]).optional(),
+    intents: z.array(z.string()).optional(),
+    topics: z.array(z.string()).optional(),
+    engagement: z.string().optional(),
+    location: z.string().optional(),
+    event_ref: z.string().optional(),
+    limit: z.number().int().min(1).max(50).optional(),
+}, async (a) => {
+    try {
+        const result = await api("/api/v3/cards/search", { method: "POST", body: JSON.stringify(a) });
+        if (result.error)
+            return { content: [{ type: "text", text: result.error }], isError: true };
+        const results = (result.results || []).map((r) => ({
+            card_id: r.card_id, card_type: r.card_type, revocation_status: r.revocation_status,
+            headline: r.headline ? sanitize(r.headline) : undefined,
+            intents: r.intents,
+            seeking: (r.seeking || []).map((s) => ({ ...s, description: sanitize(s.description) })),
+            offering: (r.offering || []).map((o) => ({ ...o, description: sanitize(o.description) })),
+            event_ref: r.event_ref, team_size_sought: r.team_size_sought,
+        }));
+        return { content: [{ type: "text", text: JSON.stringify({ count: result.count, results }, null, 2) }] };
+    }
+    catch (e) {
+        return { content: [{ type: "text", text: `Network error: ${e.message}` }], isError: true };
+    }
+});
+// ── Revocation verbs (spec invariant 7) ──────────────────────────────────
+const V3_VERBS = [
+    { tool: "withdraw_card", path: "withdraw", desc: "Withdraw a v3 card from the network. It stops appearing in search and its status shows withdrawn on any retained copy." },
+    { tool: "supersede_claims", path: "supersede", desc: "Mark a v3 card superseded (its claims are replaced by a newer card). Status shows superseded." },
+    { tool: "revoke_agent_authority", path: "revoke-authority", desc: "Revoke all future agent authority tied to a v3 card. The card leaves search and its status shows authority_revoked." },
+    { tool: "delete_server_copy", path: "delete-server-copy", desc: "Ask the server to delete its stored copy of a v3 card. Content is blanked; status shows deleted. Counterparties may retain what they already received." },
+    { tool: "stop_new_matches", path: "stop-new-matches", desc: "Stop new matches against a v3 card without withdrawing it. Status shows stopped_new_matches." },
+];
+for (const v of V3_VERBS) {
+    server.tool(v.tool, v.desc, { card_id: z.string().describe("The v3 card_id to act on") }, async (a) => {
+        try {
+            const signature = sign(`${v.path}:${a.card_id}`, keys.privateKey);
+            const result = await api(`/api/v3/cards/${a.card_id}/${v.path}`, { method: "POST", body: JSON.stringify({ public_key: keys.publicKey, signature }) });
+            if (result.error)
+                return { content: [{ type: "text", text: `Failed: ${result.error}` }], isError: true };
+            return { content: [{ type: "text", text: JSON.stringify({ card_id: a.card_id, revocation_status: result.revocation_status }, null, 2) }] };
+        }
+        catch (e) {
+            return { content: [{ type: "text", text: `Network error: ${e.message}` }], isError: true };
+        }
+    });
+}
+// P2: request_counterparty_deletion is a separate phase. Stubbed so the verb
+// set is discoverable but does not silently pretend to act.
+server.tool("request_counterparty_deletion", "Ask counterparties who received your card to delete their copy. Phase 2 feature; not yet active. Counterparties may retain what they already received.", { card_id: z.string() }, async (a) => ({ content: [{ type: "text", text: JSON.stringify({ card_id: a.card_id, status: "not_available_p1", note: "request_counterparty_deletion ships in Mingle P2. In P1, delete_server_copy removes the server copy; retained counterparty copies are outside protocol reach." }, null, 2) }] }));
+// ── get_card_status: v3 status for the principal's tracked cards ──────────
+server.tool("get_card_status", "Show the current server status of the v3 cards you have published (adapts the digest to v3 card types). Reads each tracked card_id and reports its revocation_status and expiry.", {}, async () => {
+    const tracked = listV3Cards();
+    const rows = [];
+    for (const t of tracked.slice(0, 20)) {
+        try {
+            const r = await api(`/api/v3/cards/${t.card_id}`);
+            rows.push({ card_id: t.card_id, card_type: t.card_type, headline: sanitize(t.headline), revocation_status: r.revocation_status ?? "unknown", expires_at: r.expires_at ?? null });
+        }
+        catch {
+            rows.push({ card_id: t.card_id, card_type: t.card_type, headline: sanitize(t.headline), revocation_status: "unreachable", expires_at: null });
+        }
+    }
+    return { content: [{ type: "text", text: JSON.stringify({ v3_cards: rows.length, cards: rows }, null, 2) }] };
 });
 // ══════════════════════════════════════
 // Start
