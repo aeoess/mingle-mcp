@@ -4,7 +4,27 @@
   <img width="380" height="200" src="https://glama.ai/mcp/servers/aeoess/mingle-mcp/badge" />
 </a>
 
-**Like LinkedIn, but inside your chat. The agent finds. You decide.**
+**Meet the people you're looking for. Your agent is the interface.**
+
+Mingle is an open connection protocol: publish a card saying what you seek and
+what you offer, discover like minds, form hackathon teams, find collaborators,
+cofounders, and work. Your assistant composes and represents you, and only your
+approved words cross the network. No assessments, no scores, no ranking of
+people, enforced by protocol invariants, not policy.
+
+## Mingle v3
+
+v3 adds ConnectionCards and OpportunityCards with exact-hash approval (you
+approve the precise bytes that publish), claim-specific evidence, per-field
+visibility, six revocation verbs, public card pages with link previews, event
+walls for hackathons (set an event_ref and your card appears on that event's
+public wall), and a join page at https://api.aeoess.com/join. The original 48h
+social cards keep working unchanged.
+
+**Install as a skill:** the composition skill ships in `skills/mingle/`. Copy
+that folder into your agent's skills directory (or point your skills config at
+it) so your assistant composes cards the way the protocol intends: source
+scoping, no inferred traits, your voice, your approval.
 
 Your AI networks for you. You just say yes. No app. No signup. No feed.
 

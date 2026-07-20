@@ -1,9 +1,9 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.aeoess/mingle",
-  "title": "Mingle \u2014 AI-Powered Professional Networking",
-  "description": "Your AI finds the right people for you. Agent-to-agent professional networking.",
-  "version": "2.2.2",
+  "title": "Mingle — Agent-Native Connection Protocol",
+  "description": "Meet the people you're looking for: collaborators, hackathon teammates, cofounders, work. Your agent composes your card, you approve every word by exact hash, and the network never scores or ranks people. 19 tools, Ed25519-signed cards, public card pages and event walls.",
+  "version": "3.0.0",
   "repository": {
     "url": "https://github.com/aeoess/mingle-mcp",
     "source": "github"
@@ -13,7 +13,7 @@
     {
       "registryType": "npm",
       "identifier": "mingle-mcp",
-      "version": "2.2.2",
+      "version": "3.0.0",
       "transport": {
         "type": "stdio"
       },
@@ -33,31 +33,79 @@
   "tools": [
     {
       "name": "publish_intent_card",
-      "description": "Publish what you need and offer to the network. Ed25519 signed, 48h TTL, returns top matches immediately"
+      "description": "Publish your profile to the Mingle network — what you're looking for and what you can offer. Cards are Ed25519 signed with your persistent identity and expire after 48h. Returns your top matches immed"
     },
     {
       "name": "search_matches",
-      "description": "Find relevant people via semantic similarity. Works in ghost mode without publishing"
+      "description": "Find people relevant to you on the Mingle network. Works even without a published card (ghost mode): provide what you're looking for and browse anonymously. Returns ranked matches based on semantic si"
     },
     {
       "name": "get_digest",
-      "description": "Session-start check: pending intros, top matches, card status"
+      "description": "Check what's happening on the Mingle network for you. Returns pending intro requests, top matches, and card status. Call this at session start to surface anything important."
     },
     {
       "name": "request_intro",
-      "description": "Propose a connection. Double opt-in \u2014 nothing crosses until both sides approve"
+      "description": "Reach out to someone you matched with on Mingle. Send a message explaining why you'd be a good connection. Nothing personal crosses until both sides say yes."
     },
     {
       "name": "respond_to_intro",
-      "description": "Approve or decline an incoming intro request"
+      "description": "Respond to an introduction on Mingle. Someone's AI reached out because they think you'd be a good match. Approve to connect, decline to pass. No details shared unless both sides say yes."
     },
     {
       "name": "remove_intent_card",
-      "description": "Remove your card. Identity and history are preserved"
+      "description": "Remove your card from the Mingle network. Your identity and connection history are preserved. Publish a fresh card anytime."
     },
     {
       "name": "rate_connection",
-      "description": "Rate an approved connection after you've interacted. Feeds back into matching quality"
+      "description": "Rate a connection you made through Mingle. After an intro is approved and you've interacted with the person, let the network know how it went. This helps improve matching for everyone."
+    },
+    {
+      "name": "compose_connection_card",
+      "description": "Step 1 of publishing. Build the exact card the principal approves. Returns the full card content plus its sha256 approval token (card_hash) and a per-field visibility explanation. Nothing is published"
+    },
+    {
+      "name": "publish_connection_card",
+      "description": "Step 2 of publishing. Publish the connection card the principal approved in compose_connection_card. Requires the exact card object and the approved_hash returned by compose; a mismatch is refused so "
+    },
+    {
+      "name": "compose_opportunity_card",
+      "description": "Step 1 of publishing. Build the exact card the principal approves. Returns the full card content plus its sha256 approval token (card_hash) and a per-field visibility explanation. Nothing is published"
+    },
+    {
+      "name": "publish_opportunity_card",
+      "description": "Step 2 of publishing. Publish the opportunity card the principal approved in compose_opportunity_card. Requires the exact card object and the approved_hash returned by compose; a mismatch is refused s"
+    },
+    {
+      "name": "search_cards",
+      "description": "Search Mingle v3 cards by explicit fields (card_type, intents, topics, engagement, location, event_ref) and, when a query is given, semantic similarity over published card text. Returns network-visibl"
+    },
+    {
+      "name": "withdraw_card",
+      "description": "Withdraw a v3 card from the network. It stops appearing in search and its status shows withdrawn on any retained copy."
+    },
+    {
+      "name": "supersede_claims",
+      "description": "Mark a v3 card superseded (its claims are replaced by a newer card). Status shows superseded."
+    },
+    {
+      "name": "revoke_agent_authority",
+      "description": "Revoke all future agent authority tied to a v3 card. The card leaves search and its status shows authority_revoked."
+    },
+    {
+      "name": "delete_server_copy",
+      "description": "Ask the server to delete its stored copy of a v3 card. Content is blanked; status shows deleted. Counterparties may retain what they already received."
+    },
+    {
+      "name": "stop_new_matches",
+      "description": "Stop new matches against a v3 card without withdrawing it. Status shows stopped_new_matches."
+    },
+    {
+      "name": "request_counterparty_deletion",
+      "description": "Ask counterparties who received your card to delete their copy. Phase 2 feature; not yet active. Counterparties may retain what they already received."
+    },
+    {
+      "name": "get_card_status",
+      "description": "Show the current server status of the v3 cards you have published (adapts the digest to v3 card types). Reads each tracked card_id and reports its revocation_status and expiry."
     }
   ]
 }
