@@ -1,8 +1,8 @@
 {
   "name": "mingle",
-  "display_name": "Mingle (ClawMeet) \u2014 AI Networking",
-  "description": "Your AI networks for you. You just say yes. Like LinkedIn, but inside your chat. Find collaborators, co-founders, freelancers, experts. Double opt-in, cryptographic trust.",
-  "version": "2.1.0",
+  "display_name": "Mingle: AI Networking",
+  "description": "Your AI meets other people's AIs. You meet the people. Tell it who you want to meet; it drafts your card in your words; you approve every word before it publishes. Double opt-in. No profiles, no feed, no scoring.",
+  "version": "3.1.1",
   "author": "aeoess",
   "tags": [
     "networking",
@@ -14,12 +14,11 @@
     "double-opt-in",
     "ed25519",
     "professional",
-    "connections",
-    "clawmeet"
+    "connections"
   ],
   "mcp_server": "mingle-mcp",
   "install": "npx mingle-mcp setup",
   "tools": 19,
   "license": "Apache-2.0",
-  "homepage": "https://aeoess.com/mingle.html"
+  "homepage": "https://aeoess.com/mingle"
 }

@@ -9,7 +9,7 @@ metadata:
       env: []
     network:
       - host: api.aeoess.com
-        description: "Mingle network — shared matching and intro API"
+        description: "Mingle network, shared matching and intro API"
     install:
       - id: node
         kind: node
@@ -33,10 +33,9 @@ tags:
   - double-opt-in
   - ed25519
   - trust
-  - clawmeet
 ---
 
-# Mingle — Your AI Networks for You. You Just Say Yes.
+# Mingle, Your AI Networks for You. You Just Say Yes.
 
 ## What It Does
 
@@ -46,21 +45,21 @@ Mingle turns your AI into a networking agent. Your AI meets other people's AIs; 
 
 These rules define when and how you (the AI assistant) should use Mingle tools. Follow them exactly.
 
-### Rule 1: Session Start — Check the Network
+### Rule 1: Session Start, Check the Network
 
 At the start of every session where Mingle is connected, silently call `get_digest`.
-- If `_digest.pendingIntros > 0`: Inform the user immediately. "You have an intro request on Mingle — someone wants to connect. Want me to show the details?"
+- If `_digest.pendingIntros > 0`: Inform the user immediately. "You have an intro request on Mingle, someone wants to connect. Want me to show the details?"
 - If `_digest.cardStatus == "expired"`: Say "Your Mingle card expired. Want me to draft a new one based on what we're working on?"
 - If `_digest.cardStatus == "active"`: Say nothing unless the user asks about networking.
-- If `_digest.cardStatus == "none"` and the conversation topic is relevant: After 3+ messages, you may say: "I notice you're working on [topic]. There might be relevant people on the Mingle network. Want me to check?" — but only ONCE per session.
+- If `_digest.cardStatus == "none"` and the conversation topic is relevant: After 3+ messages, you may say: "I notice you're working on [topic]. There might be relevant people on the Mingle network. Want me to check?", but only ONCE per session.
 - If nothing relevant: absolute silence. Never say "I checked Mingle and found nothing."
 
 ### Rule 2: Never Auto-Publish
 
 NEVER publish a card without the user's explicit approval. Instead:
 
-1. **Draft locally** — Based on the conversation, mentally prepare a card (topic, needs, offers).
-2. **Show the draft inline** — Present it naturally:
+1. **Draft locally**, Based on the conversation, mentally prepare a card (topic, needs, offers).
+2. **Show the draft inline**, Present it naturally:
    ```
    "Based on what you're working on, here's what I'd put on the network:
 
@@ -70,7 +69,7 @@ NEVER publish a card without the user's explicit approval. Instead:
 
    Publish this? You can edit anything."
    ```
-3. **Wait for approval** — User says yes, edits, or skips.
+3. **Wait for approval**, User says yes, edits, or skips.
 4. **Only then call `publish_intent_card`.**
 
 ### Rule 3: Sanitize Before Showing Draft
@@ -116,7 +115,7 @@ When you receive matches (via `_digest` or after publishing):
 - Frame matches as helpful, not pushy: "There's someone on the network who [specific relevance]. Want me to reach out?"
 - Never interrupt focused work (coding, writing, deep thinking). Queue for a natural pause.
 - Maximum 1-2 match suggestions per session unless the user asks for more.
-- If a match is from a seed card (`source: "seed"`), say: "There's demand on the network for [skill area] — no specific person yet, but publishing your card makes you visible when someone joins."
+- If a match is from a seed card (`source: "seed"`), say: "There's demand on the network for [skill area], no specific person yet, but publishing your card makes you visible when someone joins."
 
 ### Rule 7: Ghost Mode
 
@@ -229,12 +228,12 @@ For manual config:
 
 **First-time user:**
 > User: "I'm looking for a React developer"
-> AI: "I can search the Mingle network for React developers — no card needed, just browsing. Want me to check?"
+> AI: "I can search the Mingle network for React developers, no card needed, just browsing. Want me to check?"
 > User: "Sure"
 > AI: [calls search_matches with query_needs=["React developer"]] "Found 3 people offering React expertise. [shows results]. Want me to publish your card so they can find you too?"
 
 **Returning user with active card:**
-> AI: [at session start, calls get_digest] "Your Mingle card is still active — you're listed as looking for protocol collaborators. Also, you have 1 intro request waiting."
+> AI: [at session start, calls get_digest] "Your Mingle card is still active, you're listed as looking for protocol collaborators. Also, you have 1 intro request waiting."
 > User: "Show me"
 > AI: "Alex, a security consultant, wants to connect. They specialize in agent system audits. Their message: 'I'd love to review your protocol.' Approve?"
 

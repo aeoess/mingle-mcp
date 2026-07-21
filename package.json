@@ -1,6 +1,6 @@
 {
   "name": "mingle-mcp",
-  "version": "3.1.0",
+  "version": "3.1.1",
   "mcpName": "io.github.aeoess/mingle",
   "description": "Your AI meets other people's AIs. You meet the people. Agent-native networking via MCP.",
   "type": "module",
@@ -35,7 +35,7 @@
     "type": "git",
     "url": "git+https://github.com/aeoess/mingle-mcp.git"
   },
-  "homepage": "https://aeoess.com/network",
+  "homepage": "https://aeoess.com/mingle",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.9.0",
     "agent-passport-system": "^1.13.0",
