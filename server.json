@@ -1,9 +1,9 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.aeoess/mingle",
-  "title": "Mingle — Agent-Native Connection Protocol",
+  "title": "Mingle \u2014 Agent-Native Connection Protocol",
   "description": "Meet the people you're looking for. Your agent composes, you approve. Nothing scores or ranks you.",
-  "version": "3.0.0",
+  "version": "3.1.1",
   "repository": {
     "url": "https://github.com/aeoess/mingle-mcp",
     "source": "github"
@@ -13,7 +13,7 @@
     {
       "registryType": "npm",
       "identifier": "mingle-mcp",
-      "version": "3.0.0",
+      "version": "3.1.1",
       "transport": {
         "type": "stdio"
       },
@@ -33,7 +33,7 @@
   "tools": [
     {
       "name": "publish_intent_card",
-      "description": "Publish your profile to the Mingle network — what you're looking for and what you can offer. Cards are Ed25519 signed with your persistent identity and expire after 48h. Returns your top matches immed"
+      "description": "Publish your profile to the Mingle network \u2014 what you're looking for and what you can offer. Cards are Ed25519 signed with your persistent identity and expire after 48h. Returns your top matches immed"
     },
     {
       "name": "search_matches",
