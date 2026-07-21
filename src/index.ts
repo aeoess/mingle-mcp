@@ -1083,6 +1083,58 @@ server.tool(
   },
 );
 
+// ══════════════════════════════════════════════════════════════
+// Mingle v4 private fit - Fit Policy (set_fit_policy)
+// A private, per-card set of typed dimensions, each with a value and one of five
+// disclosure controls (local_only, testable, reveal_overlap, reveal_bucket,
+// reveal_exact). Values are private and never leave the owner except through the
+// mutually-authorized predicate handshake. The work intent may never carry a
+// dimension. Approved as a whole set by its content hash.
+// ══════════════════════════════════════════════════════════════
+
+// Mirror of the server's policy hash: normalize then canonicalize+sha256.
+function fitPolicyHash(dimensions: any[]): string {
+  const normalized = [...dimensions]
+    .map(x => ({ dimension: x.dimension, value: x.value, sensitivity: x.sensitivity, disclosure_state: x.disclosure_state, allowed_intents: [...(x.allowed_intents ?? [])].sort(), expires_at: x.expires_at, importance: x.importance }))
+    .sort((a, b) => String(a.dimension).localeCompare(String(b.dimension)));
+  return createHash("sha256").update(canonicalize(normalized)).digest("hex");
+}
+
+const DIM = z.object({
+  dimension: z.string(),
+  value: z.any(),
+  sensitivity: z.enum(["low", "moderate", "high"]),
+  disclosure_state: z.enum(["local_only", "testable", "reveal_overlap", "reveal_bucket", "reveal_exact"]),
+  allowed_intents: z.array(z.enum(["cofound", "team_up", "collaborate", "meet", "advise"])).min(1),
+  expires_at: z.string(),
+  importance: z.enum(["essential", "useful", "optional", "do_not_ask"]),
+});
+
+server.tool(
+  "set_fit_policy",
+  "Set your private Fit Policy for a card: a list of typed dimensions (weekly_commitment, start_window, time_horizon, timezone, cadence, project_stage, relationship_shape, role_spike, role_antiportfolio, decision_model). Each carries a value and ONE disclosure control: local_only (your agent may use it to order your own pool; it never leaves), testable (a fixed predicate may be evaluated without revealing the value), reveal_overlap (a yes/no overlap may be released on mutual reciprocity), reveal_bucket (a coarse bucket, same condition), reveal_exact (exact value, only on your tap). Values are private; only the schema is public. The work intent may never be in allowed_intents. Two steps: preview, then confirm:true to approve the exact set. Before you mark a dimension testable, tell the principal what a result could reveal (for example, allowing weekly_commitment as testable may reveal that their availability satisfies the other side's stated range).",
+  {
+    dimensions: z.array(DIM).min(1).max(10),
+    card_id: z.string().optional().describe("Which of your cards; defaults to your most recent"),
+    confirm: z.boolean().optional(),
+  },
+  async (a) => {
+    const mine = resolveMyCard(a.card_id);
+    if (!mine) return asText("You have no published v3 card to attach a policy to. Publish a card first.", true);
+    if (!a.confirm) {
+      return asText({ step: "preview", card_id: mine.card_id, dimensions: a.dimensions, note: "This exact set becomes your Fit Policy. For any dimension you set to testable or higher, confirm the principal understands what a result could reveal. Call set_fit_policy again with confirm:true to approve." });
+    }
+    try {
+      const approved_hash = fitPolicyHash(a.dimensions);
+      const nonce = newNonce();
+      const body = { card_id: mine.card_id, dimensions: a.dimensions, approved_hash, public_key: keys.publicKey, nonce, signature: sign(`set-fit-policy:${mine.card_id}:${approved_hash}:${nonce}`, keys.privateKey) };
+      const result = await api("/api/v4/fit/policy", { method: "POST", body: JSON.stringify(body) });
+      if (result.error) return asText(`Failed: ${result.error}`, true);
+      return asText({ set: true, card_id: result.card_id, version: result.version, policy_hash: result.policy_hash });
+    } catch (e: any) { return asText(`Network error: ${e.message}`, true); }
+  },
+);
+
 // ══════════════════════════════════════
 // Start
 // ══════════════════════════════════════
