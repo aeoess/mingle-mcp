@@ -1213,6 +1213,89 @@ server.tool("request_more_v4", "Ask the other side for more on up to 3 fit dimen
         return asText(`Network error: ${e.message}`, true);
     }
 });
+// ══════════════════════════════════════════════════════════════
+// Mingle v4 private fit - graduated autonomy (set / pause / activity)
+// Autonomy is per-dimension, per-purpose, time-limited, never one toggle. A
+// scope may auto-disclose overlap (state 3) and, if enabled, buckets (state 4);
+// exact (state 5) is NEVER autonomous, a high-sensitivity dimension always needs
+// a per-match tap, and health/family/politics/finance/third-party are always
+// forbidden. Every automatic action leaves a receipt the pulse can read.
+// ══════════════════════════════════════════════════════════════
+const AUTONOMY_ALWAYS_FORBIDDEN = ["health", "family", "politics", "finance", "third_party"];
+function fitAutonomyHash(scope) {
+    const forbidden = [...new Set([...(scope.forbidden_categories ?? []), ...AUTONOMY_ALWAYS_FORBIDDEN])].sort();
+    const normalized = {
+        intents: [...scope.intents].sort(), dimensions: [...scope.dimensions].sort(),
+        auto_reveal_overlap: scope.auto_reveal_overlap, reveal_bucket_on_reciprocity: scope.reveal_bucket_on_reciprocity,
+        ask_before_exact: scope.ask_before_exact !== false, forbidden_categories: forbidden, expiry: scope.expiry,
+    };
+    return createHash("sha256").update(canonicalize(normalized)).digest("hex");
+}
+server.tool("set_fit_autonomy", "Set a scoped standing autonomy for a card: which intents and dimensions your agent may handle without asking each time, and to what tier. auto_reveal_overlap lets it disclose a yes/no overlap under the scope; reveal_bucket_on_reciprocity lets it disclose a coarse bucket; exact values are NEVER autonomous; a high-sensitivity dimension always asks per-match. health, family, politics, finance, and third-party topics are always forbidden and are merged in automatically. Two steps: preview, then confirm:true to approve the exact scope.", {
+    scope: z.object({
+        intents: z.array(z.enum(["cofound", "team_up", "collaborate", "meet", "advise"])).min(1),
+        dimensions: z.array(z.string()).min(1),
+        auto_reveal_overlap: z.boolean(),
+        reveal_bucket_on_reciprocity: z.boolean(),
+        ask_before_exact: z.boolean().optional(),
+        forbidden_categories: z.array(z.string()).optional(),
+        expiry: z.string(),
+    }),
+    card_id: z.string().optional(),
+    confirm: z.boolean().optional(),
+}, async (a) => {
+    const mine = resolveMyCard(a.card_id);
+    if (!mine)
+        return asText("You have no published card to scope autonomy for.", true);
+    if (!a.confirm)
+        return asText({ step: "preview", card_id: mine.card_id, scope: a.scope, note: "This standing scope lets your agent act at the stated tier without asking each time. Exact values still never auto-release, and high-sensitivity dimensions always ask. Call set_fit_autonomy again with confirm:true to approve." });
+    try {
+        const approved_hash = fitAutonomyHash(a.scope);
+        const nonce = newNonce();
+        const body = { card_id: mine.card_id, scope: a.scope, approved_hash, public_key: keys.publicKey, nonce, signature: sign(`set-fit-autonomy:${mine.card_id}:${approved_hash}:${nonce}`, keys.privateKey) };
+        const r = await api("/api/v4/fit/autonomy", { method: "POST", body: JSON.stringify(body) });
+        if (r.error)
+            return asText(`Failed: ${r.error}`, true);
+        return asText({ set: true, card_id: r.card_id, version: r.version, scope_hash: r.scope_hash, forbidden_categories: r.forbidden_categories });
+    }
+    catch (e) {
+        return asText(`Network error: ${e.message}`, true);
+    }
+});
+server.tool("pause_fit_autonomy", "Pause or resume all autonomous fit disclosure for a card. While paused, nothing discloses without the principal's per-match approval, whatever the standing scope says.", { paused: z.boolean(), card_id: z.string().optional() }, async (a) => {
+    const mine = resolveMyCard(a.card_id);
+    if (!mine)
+        return asText("You have no published card.", true);
+    try {
+        const nonce = newNonce();
+        const body = { card_id: mine.card_id, paused: a.paused, public_key: keys.publicKey, nonce, signature: sign(`fit-autonomy-pause:${mine.card_id}:${a.paused}:${nonce}`, keys.privateKey) };
+        const r = await api("/api/v4/fit/autonomy/pause", { method: "POST", body: JSON.stringify(body) });
+        if (r.error)
+            return asText(`Failed: ${r.error}`, true);
+        return asText({ paused: r.paused });
+    }
+    catch (e) {
+        return asText(`Network error: ${e.message}`, true);
+    }
+});
+server.tool("get_fit_activity", "Show the principal a legible 'while you were away' summary of automatic fit activity for a card: how many cards were evaluated, how many people an overlap was disclosed to and on which dimensions, how many buckets were disclosed, and how many exact values were released (which should be zero unless the principal tapped reveal). Read this at session start when a standing autonomy scope is active.", { card_id: z.string().optional(), since: z.string().optional() }, async (a) => {
+    const mine = resolveMyCard(a.card_id);
+    if (!mine)
+        return asText("You have no published card.", true);
+    try {
+        const nonce = newNonce();
+        const qs = new URLSearchParams({ card_id: mine.card_id, public_key: keys.publicKey, nonce, signature: sign(`fit-autonomy-activity:${mine.card_id}:${nonce}`, keys.privateKey) });
+        if (a.since)
+            qs.set("since", a.since);
+        const r = await api(`/api/v4/fit/autonomy/activity?${qs.toString()}`);
+        if (r.error)
+            return asText(r.error, true);
+        return asText({ summary: r.summary, note: "This is what your agent disclosed automatically. If exact_values_released is not zero, a human tap released them." });
+    }
+    catch (e) {
+        return asText(`Network error: ${e.message}`, true);
+    }
+});
 // ══════════════════════════════════════
 // Start
 // ══════════════════════════════════════

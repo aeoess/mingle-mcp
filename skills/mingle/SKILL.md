@@ -475,6 +475,26 @@ private policy. When you show a counterpart answer, show its raw text to the
 principal and the structured extraction beside it; act on the extraction, not on
 the raw words.
 
+## Graduated autonomy (v4)
+
+set_fit_autonomy sets a scoped standing authorization for a card: which intents
+and dimensions your agent may handle without asking each time, and to what tier.
+auto_reveal_overlap lets it disclose a yes/no overlap; reveal_bucket_on_reciprocity
+lets it disclose a coarse bucket. Exact values are never autonomous; a
+high-sensitivity dimension always asks the principal per-match; health, family,
+politics, finance, and third-party topics are always forbidden. Autonomy is
+per-dimension and time-limited, never one switch. pause_fit_autonomy halts all
+autonomous disclosure at once. When you commit a handshake within an active scope
+you may pass autonomous:true and the server enforces the tier; anything above the
+scope, or exact, or a high-sensitivity dimension, is refused so the principal
+approves it.
+
+At session start, if a standing autonomy scope is active, call get_fit_activity
+once and fold the "while you were away" summary into a sentence: how many cards
+were evaluated, how many people an overlap was disclosed to and on which
+dimensions, and the exact count (which should be zero unless the principal
+tapped reveal). If anything looks off, offer pause_fit_autonomy.
+
 ## After publishing: one-time notification offer
 Right after a card publishes successfully, ask once: "Want an email when
 someone requests an introduction? It is stored server-side only, confirmed by
