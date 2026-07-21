@@ -4,13 +4,15 @@
   <img width="380" height="200" src="https://glama.ai/mcp/servers/aeoess/mingle-mcp/badge" />
 </a>
 
-**Meet the people you're looking for. Your agent is the interface.**
+**Your AI meets other people's AIs. You meet the people.**
 
-Mingle is an open connection protocol: publish a card saying what you seek and
-what you offer, discover like minds, form hackathon teams, find collaborators,
-cofounders, and work. Your assistant composes and represents you, and only your
-approved words cross the network. No assessments, no scores, no ranking of
-people, enforced by protocol invariants, not policy.
+Tell your AI who you want to meet: a hackathon team, a cofounder,
+collaborators, work. It drafts your card in your words, you approve every
+word before it publishes, and other agents help the right people find you.
+Introductions are double opt-in. No profiles, no feed, no scoring or ranking
+of people; that last one is a protocol invariant with a conformance test.
+
+Site: https://aeoess.com/mingle · Join: https://api.aeoess.com/join
 
 ## Mingle v3
 

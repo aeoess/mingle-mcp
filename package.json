@@ -2,7 +2,7 @@
   "name": "mingle-mcp",
   "version": "3.0.0",
   "mcpName": "io.github.aeoess/mingle",
-  "description": "Your AI finds the right people for you. Agent-to-agent networking via MCP.",
+  "description": "Your AI meets other people's AIs. You meet the people. Agent-native networking via MCP.",
   "type": "module",
   "bin": {
     "mingle-mcp": "build/bin.js",
