@@ -495,6 +495,17 @@ were evaluated, how many people an overlap was disclosed to and on which
 dimensions, and the exact count (which should be zero unless the principal
 tapped reveal). If anything looks off, offer pause_fit_autonomy.
 
+## First Step plan (v4)
+
+Once fit looks promising, propose_first_step drafts the principal's half of a
+short plan for the first real conversation (purpose, next_action, meeting_length,
+agenda, each_wants, boundaries, expiry), from the principal's OWN words only.
+Both sides propose a half. approve_first_step fetches the exact merged plan; show
+it to the principal and only approve on their word. The plan is final only when
+BOTH sides approve the exact same content; if either changes their half,
+approvals reset and it must be re-approved. Contact is exchanged through the
+normal completion flow, never inside the plan.
+
 ## After publishing: one-time notification offer
 Right after a card publishes successfully, ask once: "Want an email when
 someone requests an introduction? It is stored server-side only, confirmed by

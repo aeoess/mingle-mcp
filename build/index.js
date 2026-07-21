@@ -1296,6 +1296,58 @@ server.tool("get_fit_activity", "Show the principal a legible 'while you were aw
         return asText(`Network error: ${e.message}`, true);
     }
 });
+// ══════════════════════════════════════════════════════════════
+// Mingle v4 private fit - First Step artifact
+// After fit, each side drafts (from own approved material only) half of a
+// proposed first conversation. The shared artifact is final only when BOTH
+// humans exact-approve the same merged content, mirroring the contact line.
+// ══════════════════════════════════════════════════════════════
+const FS_HALF = z.object({
+    purpose: z.string().max(200),
+    next_action: z.string().max(200),
+    meeting_length: z.string().max(40),
+    agenda: z.array(z.string().max(200)).max(5),
+    each_wants: z.string().max(300),
+    boundaries: z.array(z.string().max(200)).max(5),
+    expiry: z.string(),
+});
+server.tool("propose_first_step", "Propose your half of a First Step: a short plan for the first real conversation, drafted from the principal's OWN words only (purpose, next_action, meeting_length, agenda, each_wants, boundaries, expiry). Both sides propose a half; the shared plan is final only when both humans approve it. Two steps: preview, then confirm:true to send your half. Contact details do not go in the plan; contact is exchanged separately.", { intro_id: z.string(), half: FS_HALF, from_card_id: z.string().optional(), confirm: z.boolean().optional() }, async (a) => {
+    if (!a.confirm)
+        return asText({ step: "preview", half: a.half, note: "This is your half of the shared first-step plan. Call propose_first_step again with confirm:true to send it; the plan is final only after both sides approve." });
+    try {
+        const nonce = newNonce();
+        const body = { half: a.half, public_key: keys.publicKey, nonce, signature: sign(`fit-firststep:${a.intro_id}:${nonce}`, keys.privateKey) };
+        const r = await api(`/api/v4/fit/${a.intro_id}/first-step`, { method: "POST", body: JSON.stringify(body) });
+        if (r.error)
+            return asText(`Failed: ${r.error}`, true);
+        return asText({ proposed: true, both_proposed: r.both_proposed, note: r.both_proposed ? "Both halves are in. Use approve_first_step to approve the exact shared plan." : "Waiting on the other side to propose their half." });
+    }
+    catch (e) {
+        return asText(`Network error: ${e.message}`, true);
+    }
+});
+server.tool("approve_first_step", "Approve the shared First Step plan (both halves together). Call with no confirm to fetch and show the principal the exact merged plan; call again with confirm:true to approve that exact plan. The plan is final only when BOTH sides approve. If either side later changes their half, approvals reset and it must be re-approved.", { intro_id: z.string(), confirm: z.boolean().optional() }, async (a) => {
+    try {
+        const nonce = newNonce();
+        const qs = new URLSearchParams({ public_key: keys.publicKey, nonce, signature: sign(`fit-firststep-get:${a.intro_id}:${nonce}`, keys.privateKey) });
+        const cur = await api(`/api/v4/fit/${a.intro_id}/first-step?${qs.toString()}`);
+        if (cur.error)
+            return asText(cur.error, true);
+        if (!cur.shared_digest)
+            return asText({ note: "Both sides must propose a half before you can approve. Waiting on the other half." });
+        if (!a.confirm)
+            return asText({ step: "preview", half_a: cur.half_a, half_b: cur.half_b, note: "Show the principal this exact shared plan. Call approve_first_step again with confirm:true only if they approve it verbatim." });
+        const n2 = newNonce();
+        const body = { approved_digest: cur.shared_digest, public_key: keys.publicKey, nonce: n2, signature: sign(`fit-firststep-approve:${a.intro_id}:${cur.shared_digest}:${n2}`, keys.privateKey) };
+        const r = await api(`/api/v4/fit/${a.intro_id}/first-step/approve`, { method: "POST", body: JSON.stringify(body) });
+        if (r.error)
+            return asText(`Failed: ${r.error}`, true);
+        return asText({ approved: true, finalized: r.finalized, note: r.finalized ? "Both sides approved. The first-step plan is set." : "Your approval is in; waiting on the other side." });
+    }
+    catch (e) {
+        return asText(`Network error: ${e.message}`, true);
+    }
+});
 // ══════════════════════════════════════
 // Start
 // ══════════════════════════════════════
