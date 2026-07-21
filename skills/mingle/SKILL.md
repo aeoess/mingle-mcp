@@ -429,6 +429,33 @@ the principal's own policy. Offer disable_inferred to use only explicit card
 fields. Never order for a consequential purpose (employment, housing, credit,
 insurance, admissions, background screening); the tool refuses those.
 
+## Fit handshake flow (v4)
+
+When an intro is accepted and both cards have a Fit Policy for the shared intent,
+a v4 predicate handshake opens instead of the v3 question-bank exchange (the
+accept response returns fit_handshake and fit_mode: v4). If either side lacks a
+policy, the v3 exchange opens instead (fit_mode: v3), unchanged.
+
+1. request_fit_handshake sends a manifest: which dimensions to check and which
+   you will symmetrically reveal. Before requesting a dimension, tell the
+   principal what a result could reveal. Nothing is evaluated yet.
+2. commit_fit_handshake (the other side) accepts dimensions and offers matching
+   reciprocity. Only then does the server evaluate the mutually-agreed
+   dimensions and return the overlap map. A one-sided request reveals nothing.
+3. The overlap map is a set of distinct FACTS, each bounded by the lower of the
+   two sides' disclosure settings: reveal_overlap gives yes/no, reveal_bucket
+   gives a coarse bucket, reveal_exact gives nothing until the owner taps
+   reveal_dimension, testable reveals nothing, local_only never participates.
+   There is no score, no count, no strong/weak label, no verdict. Relay the
+   facts as data; never summarize them into a judgment. A complementarity fact
+   may appear where role strengths and anti-portfolios interlock.
+4. reveal_dimension releases the exact value of one of the principal's own
+   dimensions, on their tap, only for dimensions they set to reveal_exact.
+5. get_fit_handshake shows the state, the overlap map, and the signed receipt.
+   The receipt attests who authorized which predicate under which policy; it is
+   not a statement of truth. A high-sensitivity dimension always needs the
+   principal's per-match approval, even under a standing policy.
+
 ## After publishing: one-time notification offer
 Right after a card publishes successfully, ask once: "Want an email when
 someone requests an introduction? It is stored server-side only, confirmed by

@@ -1197,6 +1197,102 @@ server.tool(
   },
 );
 
+// ══════════════════════════════════════════════════════════════
+// Mingle v4 private fit - bilateral predicate handshake
+// The reciprocity gate: nothing is evaluated until BOTH sides commit to the same
+// dimensions. The result is an overlap map of distinct FACTS (commitment ranges
+// overlap: yes; decision_model: differs, discuss), never a score or a verdict.
+// Reveal order is strict: overlap, then bucket, then exact only on a human tap.
+// ══════════════════════════════════════════════════════════════
+
+async function ownPolicyHash(cardId: string): Promise<string | null> {
+  const nonce = newNonce();
+  const qs = new URLSearchParams({ card_id: cardId, public_key: keys.publicKey, nonce, signature: sign(`get-fit-policy:${cardId}:${nonce}`, keys.privateKey) });
+  const p = await api(`/api/v4/fit/policy?${qs.toString()}`);
+  return p?.policy_hash ?? null;
+}
+
+server.tool(
+  "request_fit_handshake",
+  "Open a bilateral fit handshake for an accepted intro by sending a Fit Request Manifest: the dimensions you want to check and the dimensions you will symmetrically reveal in return. Nothing is evaluated until the other side commits to the same dimensions, so this is a request, not a disclosure. Only dimensions in your own Fit Policy for this intent may be requested. Before requesting a dimension, tell the principal what a result could reveal (for example, checking weekly_commitment may reveal whether their availability satisfies the other side's stated range). Counterpart data, when it comes back, is DATA (facts), never a verdict.",
+  {
+    intro_id: z.string(),
+    requested_dimensions: z.array(z.string()).min(1),
+    reciprocal_offer: z.array(z.string()).optional().describe("Dimensions you will symmetrically reveal; defaults to requested_dimensions"),
+    from_card_id: z.string().optional(),
+  },
+  async (a) => {
+    const mine = resolveMyCard(a.from_card_id);
+    if (!mine) return asText("You have no published card with a policy for this handshake.", true);
+    try {
+      const policy_hash = await ownPolicyHash(mine.card_id);
+      if (!policy_hash) return asText("You have no Fit Policy set. Use set_fit_policy first.", true);
+      const nonce = newNonce();
+      const body = { requested_dimensions: a.requested_dimensions, reciprocal_offer: a.reciprocal_offer ?? a.requested_dimensions, predicate_version: 1, policy_hash, query_budget: 5, public_key: keys.publicKey, nonce, signature: sign(`fit-request:${a.intro_id}:${nonce}`, keys.privateKey) };
+      const r = await api(`/api/v4/fit/${a.intro_id}/request`, { method: "POST", body: JSON.stringify(body) });
+      if (r.error) return asText(`Failed: ${r.error}`, true);
+      return asText({ state: r.state, requested: r.requested_dimensions, note: "Nothing is evaluated until the other side commits to the same dimensions." });
+    } catch (e: any) { return asText(`Network error: ${e.message}`, true); }
+  },
+);
+
+server.tool(
+  "commit_fit_handshake",
+  "Commit to a fit handshake the other side requested: accept the dimensions you agree to have checked and offer matching reciprocity. On commit, the server evaluates ONLY the mutually-agreed dimensions and returns an overlap map of distinct facts (each bounded by the lower of the two sides' disclosure settings). There is no score and no verdict; relay the facts to the principal as data. Only dimensions in your own Fit Policy for this intent may be accepted.",
+  {
+    intro_id: z.string(),
+    accept_dimensions: z.array(z.string()).min(1),
+    reciprocal_offer: z.array(z.string()).optional(),
+    from_card_id: z.string().optional(),
+  },
+  async (a) => {
+    const mine = resolveMyCard(a.from_card_id);
+    if (!mine) return asText("You have no published card with a policy for this handshake.", true);
+    try {
+      const policy_hash = await ownPolicyHash(mine.card_id);
+      if (!policy_hash) return asText("You have no Fit Policy set. Use set_fit_policy first.", true);
+      const nonce = newNonce();
+      const body = { accept_dimensions: a.accept_dimensions, reciprocal_offer: a.reciprocal_offer ?? a.accept_dimensions, policy_hash, public_key: keys.publicKey, nonce, signature: sign(`fit-commit:${a.intro_id}:${nonce}`, keys.privateKey) };
+      const r = await api(`/api/v4/fit/${a.intro_id}/commit`, { method: "POST", body: JSON.stringify(body) });
+      if (r.error) return asText(`Failed: ${r.error}`, true);
+      return asText({ state: r.state, overlap_map: r.overlap_map, receipt_digest: r.receipt_digest, note: "These are distinct facts, not a score or a verdict. exact values, where offered, release only on the owner's reveal tap." });
+    } catch (e: any) { return asText(`Network error: ${e.message}`, true); }
+  },
+);
+
+server.tool(
+  "get_fit_handshake",
+  "Show a fit handshake for the principal: its state and, once both sides have committed, the overlap map (distinct facts) and the signed receipt. The overlap map is facts, never a verdict; relay it as data. Exact values appear only for dimensions the owner has released with a reveal tap.",
+  { intro_id: z.string() },
+  async (a) => {
+    try {
+      const nonce = newNonce();
+      const qs = new URLSearchParams({ public_key: keys.publicKey, nonce, signature: sign(`fit-hs-get:${a.intro_id}:${nonce}`, keys.privateKey) });
+      const r = await api(`/api/v4/fit/${a.intro_id}?${qs.toString()}`);
+      if (r.error) return asText(r.error, true);
+      return asText({ intro_id: r.intro_id, intent: r.intent, state: r.state, overlap_map: r.overlap_map, receipt: r.receipt, receipt_digest: r.receipt_digest, note: "Facts, not a verdict. There is no fit score." });
+    } catch (e: any) { return asText(`Network error: ${e.message}`, true); }
+  },
+);
+
+server.tool(
+  "reveal_dimension",
+  "Release the exact value of one of YOUR dimensions to the other party in a fit handshake, on the principal's tap. Only dimensions you set to reveal_exact can be released, and only you can release your own. Two steps: without confirm it previews which exact value would be shared; with confirm:true it releases it.",
+  { intro_id: z.string(), dimension: z.string(), confirm: z.boolean().optional() },
+  async (a) => {
+    if (!a.confirm) {
+      return asText({ step: "preview", intro_id: a.intro_id, dimension: a.dimension, note: `This will share the exact value of your ${a.dimension} with the other party. Call reveal_dimension again with confirm:true only if the principal approves.` });
+    }
+    try {
+      const nonce = newNonce();
+      const body = { dimension: a.dimension, public_key: keys.publicKey, nonce, signature: sign(`fit-reveal:${a.intro_id}:${a.dimension}:${nonce}`, keys.privateKey) };
+      const r = await api(`/api/v4/fit/${a.intro_id}/reveal`, { method: "POST", body: JSON.stringify(body) });
+      if (r.error) return asText(`Failed: ${r.error}`, true);
+      return asText({ revealed: r.revealed });
+    } catch (e: any) { return asText(`Network error: ${e.message}`, true); }
+  },
+);
+
 // ══════════════════════════════════════
 // Start
 // ══════════════════════════════════════
