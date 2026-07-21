@@ -1011,6 +1011,69 @@ server.tool("set_fit_policy", "Set your private Fit Policy for a card: a list of
         return asText(`Network error: ${e.message}`, true);
     }
 });
+// ══════════════════════════════════════════════════════════════
+// Mingle v4 private fit - local prioritization (NEVER leaves the agent)
+// The network returns a NEUTRAL pool; this orders the owner's OWN pool by the
+// owner's OWN policy, entirely in this tool. The ordering is never sent to the
+// server, never persisted anywhere shared, never visible to a counterpart. It
+// must never be used for a consequential purpose (employment, housing, credit,
+// insurance, etc.). An ordering can be explained citing only the counterpart's
+// OWN published card and the owner's OWN policy.
+// ══════════════════════════════════════════════════════════════
+const CONSEQUENTIAL_PURPOSES = ["employment", "hiring", "recruiting", "housing", "tenant", "credit", "lending", "insurance", "admissions", "background", "screening", "eligibility"];
+// Pure, local ordering. No network, no persistence. Returns the same candidates
+// reordered, each with a plain-language reason citing only public card text and
+// the owner's own policy tags.
+function orderCandidatesLocally(candidates, policyTags, disableInferred) {
+    const scoreOf = (c) => {
+        const text = `${c.headline ?? ""} ${(c.seeking ?? []).map((s) => s.description ?? "").join(" ")} ${(c.offering ?? []).map((o) => o.description ?? "").join(" ")}`.toLowerCase();
+        const why = [];
+        let score = 0;
+        // Explicit intent overlap (always allowed, not inferred).
+        if (Array.isArray(c.intents) && policyTags.intents.some(i => c.intents.includes(i))) {
+            score += 2;
+            why.push("their card lists an intent your policy prefers");
+        }
+        if (!disableInferred) {
+            // Complementarity: their card text mentions what you listed as anti-portfolio.
+            const compl = policyTags.anti.filter(t => text.includes(t));
+            if (compl.length) {
+                score += 3;
+                why.push(`their card mentions ${compl.join(", ")}, which your policy lists as anti-portfolio (complementary)`);
+            }
+            // Similarity on your spike tags (weaker signal).
+            const sim = policyTags.spike.filter(t => text.includes(t));
+            if (sim.length) {
+                score += 1;
+                why.push(`their card mentions ${sim.join(", ")}, near your strengths`);
+            }
+        }
+        if (why.length === 0)
+            why.push("no policy signal; original order kept");
+        return { score, why };
+    };
+    return candidates
+        .map((c, i) => ({ c, i, ...scoreOf(c) }))
+        .sort((a, b) => (b.score - a.score) || (a.i - b.i))
+        .map(x => ({ card_id: x.c.card_id, headline: sanitize(x.c.headline), reason: x.why }));
+}
+server.tool("prioritize_candidates", "Order a candidate pool LOCALLY by your own Fit Policy, for the principal only. The network never ranks people; this ordering happens entirely in this tool, is never sent to the server, never persisted anywhere shared, and is never visible to a counterpart. Pass the candidates you already fetched (for example from search_cards) and your policy's role tags. Set disable_inferred:true to use only explicit card fields (no text-inferred signals). Each result carries a plain reason citing only the counterpart's own published card and your own policy. NEVER use this ordering for a consequential purpose (employment, housing, credit, insurance, admissions, background screening); if the stated purpose is one of those, this tool refuses.", {
+    candidates: z.array(z.object({ card_id: z.string(), headline: z.string().optional(), intents: z.array(z.string()).optional(), seeking: z.array(z.any()).optional(), offering: z.array(z.any()).optional() })).min(1),
+    policy_spike_tags: z.array(z.string()).optional().describe("Your role_spike tags"),
+    policy_antiportfolio_tags: z.array(z.string()).optional().describe("Your role_antiportfolio tags"),
+    policy_intents: z.array(z.string()).optional(),
+    purpose: z.string().optional().describe("Why you are ordering; must not be a consequential-eligibility purpose"),
+    disable_inferred: z.boolean().optional(),
+}, async (a) => {
+    if (a.purpose && CONSEQUENTIAL_PURPOSES.some(p => a.purpose.toLowerCase().includes(p))) {
+        return asText("This ordering is not available for a consequential-eligibility purpose (employment, housing, credit, insurance, admissions, background screening).", true);
+    }
+    const ordered = orderCandidatesLocally(a.candidates, { spike: a.policy_spike_tags ?? [], anti: a.policy_antiportfolio_tags ?? [], intents: a.policy_intents ?? [] }, !!a.disable_inferred);
+    return asText({
+        ordered,
+        boundary: "This ordering was computed locally and is not sent to the server, not persisted, and not visible to anyone else. It is not a score of people; it is your own pool in your own preferred order.",
+    });
+});
 // ══════════════════════════════════════
 // Start
 // ══════════════════════════════════════
