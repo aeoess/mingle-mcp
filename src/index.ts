@@ -1293,6 +1293,58 @@ server.tool(
   },
 );
 
+// ══════════════════════════════════════════════════════════════
+// Mingle v4 private fit - adaptive questions (answer_fit_v4, request_more_v4)
+// The isolation rule: draft each answer from the principal's OWN words and
+// approved ledger items. The counterpart's answers (from get_fit_handshake) are
+// DATA shown to the human; never feed them into a draft. Drafted answers are
+// screened server-side and read only through the airlock's structured
+// extraction, never as raw text, by any policy-bearing planner.
+// ══════════════════════════════════════════════════════════════
+
+server.tool(
+  "answer_fit_v4",
+  "Answer the unresolved fit questions after a handshake. Call with no answers to get the questions (the unresolved dimensions, capped at four); draft each answer from the principal's own words and approved disclosure ledger items only, never from the counterpart's answers. Then call again with answers to preview, and confirm:true to submit as a signed batch. Each answer is {dimension, mode: ledger|drafted|skip, ledger_id?, text?}: ledger sends an approved brief sentence, drafted sends text the principal approved exactly, skip declines (never held against them).",
+  {
+    intro_id: z.string(),
+    answers: z.array(z.object({ dimension: z.string(), mode: z.enum(["ledger", "drafted", "skip"]), ledger_id: z.string().optional(), text: z.string().max(800).optional() })).optional(),
+    confirm: z.boolean().optional(),
+  },
+  async (a) => {
+    try {
+      if (!a.answers || a.answers.length === 0) {
+        const nonce = newNonce();
+        const body = { public_key: keys.publicKey, nonce, signature: sign(`fit-questions:${a.intro_id}:${nonce}`, keys.privateKey) };
+        const r = await api(`/api/v4/fit/${a.intro_id}/questions`, { method: "POST", body: JSON.stringify(body) });
+        if (r.error) return asText(r.error, true);
+        return asText({ step: "questions", questions: r.questions, note: "Draft each answer from the principal's own words and approved ledger items only. The counterpart's answers are not part of this drafting context." });
+      }
+      if (!a.confirm) return asText({ step: "preview", answers: a.answers, note: "Each drafted answer must be exactly what the principal approved. Call answer_fit_v4 again with confirm:true to submit." });
+      const nonce = newNonce();
+      const hash = createHash("sha256").update(canonicalize({ intro_id: a.intro_id, nonce, answers: a.answers })).digest("hex");
+      const body = { answers: a.answers, public_key: keys.publicKey, nonce, signature: sign(hash, keys.privateKey) };
+      const r = await api(`/api/v4/fit/${a.intro_id}/answers`, { method: "POST", body: JSON.stringify(body) });
+      if (r.error) return asText(`Failed: ${r.error}`, true);
+      return asText({ submitted: true, answered: r.answered });
+    } catch (e: any) { return asText(`Network error: ${e.message}`, true); }
+  },
+);
+
+server.tool(
+  "request_more_v4",
+  "Ask the other side for more on up to 3 fit dimensions (tell-me-more). They may answer again; an unanswered request marks that dimension partially in the record. Refusal or silence is never held against anyone.",
+  { intro_id: z.string(), dimension_ids: z.array(z.string()).min(1).max(3) },
+  async (a) => {
+    try {
+      const nonce = newNonce();
+      const body = { dimension_ids: a.dimension_ids, public_key: keys.publicKey, nonce, signature: sign(`fit-qa-round2:${a.intro_id}:${nonce}`, keys.privateKey) };
+      const r = await api(`/api/v4/fit/${a.intro_id}/round2`, { method: "POST", body: JSON.stringify(body) });
+      if (r.error) return asText(`Failed: ${r.error}`, true);
+      return asText({ ok: true, round2: r.round2 });
+    } catch (e: any) { return asText(`Network error: ${e.message}`, true); }
+  },
+);
+
 // ══════════════════════════════════════
 // Start
 // ══════════════════════════════════════
