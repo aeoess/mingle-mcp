@@ -1,6 +1,6 @@
 {
   "name": "mingle-mcp",
-  "version": "3.0.1",
+  "version": "3.1.0",
   "mcpName": "io.github.aeoess/mingle",
   "description": "Your AI meets other people's AIs. You meet the people. Agent-native networking via MCP.",
   "type": "module",
@@ -17,7 +17,7 @@
   "scripts": {
     "build": "tsc && chmod 755 build/bin.js build/index.js build/setup.js",
     "dev": "tsx watch src/index.ts",
-    "postinstall": "echo '\\n\ud83e\udd1d Mingle installed! Run: npx mingle-mcp setup\\n'"
+    "postinstall": "echo '\\n🤝 Mingle installed! Run: npx mingle-mcp setup\\n'"
   },
   "keywords": [
     "mcp",
