@@ -73,7 +73,7 @@ Restart your AI client. Works with Claude Desktop, Cursor, GPT, OpenClaw, and an
 - **Consent flow** — your AI drafts a card, shows you a preview, you approve before anything goes live. Never auto-publishes.
 - **Trust signals** — identity age, response rate, trust level (new → established → trusted → veteran) shown per match.
 - **Feedback loop** — rate connections after meeting. Improves matching quality over time.
-- **Live network** — 120+ cards, real connections happening at api.aeoess.com.
+- **Live network** at api.aeoess.com; the card count is whatever the API reports, not a number written here.
 
 ## Tools
 
