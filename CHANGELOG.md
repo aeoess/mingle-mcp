@@ -1,5 +1,7 @@
 ## 3.2.2 - 2026-09-08
 
+- The client config the installer writes launches `mingle-mcp@3.2.2`, pinned to the exact version, so a client never resolves a release that was not reviewed; re-run `npx mingle-mcp-setup@<version>` to move to a newer one.
+
 Answers the ClawHub security review of 3.2.1 (outcome: Review). Two findings.
 
 **T01, silent session-start network calls.** The skill told the agent to call
