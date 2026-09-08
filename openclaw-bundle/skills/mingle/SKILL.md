@@ -88,9 +88,9 @@ nudge the first time, so if `expiry_nudge` is null, do not invent one.
 "You have an intro request on Mingle, someone wants to connect. Want me to show
 the details?"
 
-**No card yet.** If the user has no card and the conversation topic is relevant:
-after 3+ messages you may say once, "I notice you're working on [topic]. There
-might be relevant people on the Mingle network. Want me to check?"
+**No card yet.** Say nothing about Mingle unless the user asks about meeting
+people, networking, or Mingle itself. Never raise it from the topic of an
+unrelated conversation.
 
 If nothing relevant: absolute silence. Never say "I checked Mingle and found
 nothing."
@@ -292,7 +292,7 @@ For manual config:
 **What gets shared afterwards:** Only what you have allowed for that specific connection, dimension by dimension, under the fit policy you set. Publishing a card is not a blanket permission: each dimension in your policy carries its own disclosure level (`local_only`, `testable`, `reveal_overlap`, `reveal_bucket`, `reveal_exact`), a handshake evaluates only the dimensions both sides authorized, and an exact value leaves only when you release it yourself. Disclosure-ledger statements are the one thing your assistant may send without approving each turn, and you wrote those statements.
 **How to check:** Ask at any time what was shared and with whom. `get_fit_activity` reports what your agent disclosed automatically, per dimension and to how many people; `get_fit_handshake` shows one handshake's outcome and any exact values released; `get_fit_record` shows the signed, closed record of an exchange with both sides' verbatim answers.
 **What stays private:** The `context` field improves matching quality but is NEVER shown to other users.
-**Network calls:** Only when a tool is explicitly called. No background pinging, no telemetry.
+**Network calls:** Only when a Mingle tool runs. Two run without an explicit user request, and only in a session where Mingle is connected and the user already has a card: the session-start `check_pending_matches` (reads matches for the user's own cards; sends the user's public key and nothing else) and, when a standing autonomy scope is active, `get_fit_activity`. Nothing runs when Mingle is not connected. No telemetry.
 **Identity:** Persistent Ed25519 keypair stored in `~/.mingle/identity.json`. Same key across sessions.
 **Trust:** Every card is cryptographically signed. Every connection requires both humans to approve.
 **Code:** Fully open source at https://github.com/aeoess/mingle-mcp
@@ -305,7 +305,6 @@ For manual config:
 - GitHub: https://github.com/aeoess/mingle-mcp
 - Parent protocol: https://aeoess.com (Agent Passport System)
 
-<!-- BEGIN MINGLE-CARD-COMPOSER-PROMPT (verbatim) -->
 ## Card composition guidance (v3)
 
 When composing a Mingle v3 ConnectionCard or OpportunityCard, follow this
@@ -370,7 +369,6 @@ hash. Set composition metadata {agent_assisted: true, skill_version}.
 ## Tone rule
 The card reads like the principal on a good day, not like marketing. If a
 sentence would embarrass them read aloud to a collaborator, rewrite it.
-<!-- END MINGLE-CARD-COMPOSER-PROMPT (verbatim) -->
 
 ## Session pulse (v3)
 
@@ -533,8 +531,11 @@ the raw words.
 
 ## Graduated autonomy (v4)
 
-set_fit_autonomy sets a scoped standing authorization for a card: which intents
-and dimensions your agent may handle without asking each time, and to what tier.
+Autonomy is off by default. Nothing is disclosed to another agent without a
+per-match yes from the user unless the user has first set a standing scope with
+set_fit_autonomy, which names the intents and dimensions the agent may handle
+on the user's behalf, and to what tier. Set it only when the user asks for it,
+and confirm the scope back before calling it.
 auto_reveal_overlap lets it disclose a yes/no overlap; reveal_bucket_on_reciprocity
 lets it disclose a coarse bucket. Exact values are never autonomous; a
 high-sensitivity dimension always asks the principal per-match; health, family,
