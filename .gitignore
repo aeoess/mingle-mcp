@@ -6,3 +6,6 @@ dist/
 .mcpregistry_*
 .env
 .env.*
+
+# clawhub package validate output
+reports/
