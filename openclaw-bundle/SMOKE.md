@@ -14,34 +14,28 @@ over stdio, calls `tools/list`, and asserts that the tool count matches the
 `tools` field in `skills/mingle/_meta.json`. It exits nonzero on any mismatch, so
 the metadata and the running server cannot drift apart silently.
 
-**What it does not prove.** It does not install the bundle into an OpenClaw
-state dir, so it does not show `openclaw plugins list` reporting the bundle or
-the skill root loading. That half could not be run on this machine. The reason is
-plain and reproducible:
+**The install half, run on 2026-09-08 on Node v24.20.0** (this machine carries it
+under ~/.n; the default shell is on v24.11.1, which OpenClaw refuses). Against a
+scratch state dir with the OpenClaw checkout's own CLI:
 
 ```
-$ node /Users/tima/cc-work/openclaw-main/openclaw.mjs plugins install --help
-openclaw: Node.js >=24.16.0 <25, or >=26.1.0 is required (current: v24.11.1).
-If you use nvm, run:
-  nvm install 26
-  nvm use 26
-  nvm alias default 26
-$ echo $?
-1
+$ OPENCLAW_STATE_DIR=/tmp/oc-smoke-state node openclaw.mjs plugins install ~/mingle-mcp/openclaw-bundle --force --accept-capabilities
+Installing to /tmp/oc-smoke-state/extensions/mingle...
+Installed plugin: mingle
+$ node openclaw.mjs plugins list      (row)
+Mingle | mingle | bundle | enabled | global:mingle | 3.2.0
+$ node openclaw.mjs plugins inspect mingle
+Format: bundle
+Bundle format: agent (Agent Plugins)
+Bundle capabilities: skills, mcpServers
+MCP servers:
+mingle
+Recorded version: 3.2.0
 ```
 
-`openclaw` is not on PATH, the local checkout at
-`/Users/tima/cc-work/openclaw-main` refuses to start under the installed Node
-v24.11.1, and no newer Node is present (`~/.nvm`, Homebrew, and Volta all have
-none). No OpenClaw runtime could be driven, so nothing about plugin listing or
-skill loading is claimed here. Anyone on a supported Node can finish the proof:
-
-```bash
-openclaw plugins install ./openclaw-bundle
-openclaw plugins list        # expect Format: bundle, Bundle format: agent (Agent Plugins)
-openclaw plugins inspect mingle
-openclaw gateway restart
-```
+Two flags are needed for a local-path install and are not needed for a ClawHub
+install: `--force` (source outside ClawHub review) and `--accept-capabilities`
+(the bundle declares an MCP server).
 
 ## How the launch matches mcp.json
 
