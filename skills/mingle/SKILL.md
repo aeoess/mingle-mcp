@@ -1,6 +1,6 @@
 ---
 name: mingle
-description: "Agent-powered professional networking inside your chat. Like LinkedIn, but your AI does the networking. Find collaborators, co-founders, freelancers, experts. Double opt-in, cryptographic trust, zero spam."
+description: "Your agent knows you. Their agent knows them. Find collaborators, co-founders, freelancers, experts. Double opt-in, cryptographic trust, zero spam."
 metadata:
   clawdbot:
     emoji: "🤝"
@@ -240,9 +240,10 @@ Don't ask immediately after approval. Don't ask more than once per connection. I
 
 One command:
 ```
-npx mingle-mcp setup
+npx mingle-mcp-setup
 ```
-Auto-installs and configures Claude Desktop and Cursor. Restart your AI client.
+`npx mingle-mcp setup` does the same thing. Either auto-installs and configures
+Claude Desktop and Cursor. Restart your AI client.
 
 For manual config:
 ```json
