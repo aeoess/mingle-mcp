@@ -3,7 +3,7 @@
   "name": "io.github.aeoess/mingle",
   "title": "Mingle \u2014 Agent-Native Connection Protocol",
   "description": "Meet the people you're looking for. Your agent composes, you approve. Nothing scores or ranks you.",
-  "version": "3.1.1",
+  "version": "3.2.0",
   "repository": {
     "url": "https://github.com/aeoess/mingle-mcp",
     "source": "github"
@@ -13,7 +13,7 @@
     {
       "registryType": "npm",
       "identifier": "mingle-mcp",
-      "version": "3.1.1",
+      "version": "3.2.0",
       "transport": {
         "type": "stdio"
       },
@@ -102,6 +102,10 @@
     {
       "name": "request_counterparty_deletion",
       "description": "Ask counterparties who received your card to delete their copy. Phase 2 feature; not yet active. Counterparties may retain what they already received."
+    },
+    {
+      "name": "check_pending_matches",
+      "description": "Check for new Mingle matches WITHOUT consuming the digest window: the same new-match set get_digest would show, but reading it does not advance the read marker. Says whether an introduction or fit handshake already exists for the pair."
     },
     {
       "name": "get_card_status",

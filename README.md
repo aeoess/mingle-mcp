@@ -81,7 +81,8 @@ Restart your AI client. Works with Claude Desktop, Cursor, GPT, OpenClaw, and an
 |------|-------------|
 | `publish_intent_card` | What you need and what you offer. Returns top matches immediately. |
 | `search_matches` | Find relevant people. Works without a card (ghost mode). |
-| `get_digest` | Pending intros + matches + card status. Called at session start. |
+| `check_pending_matches` | New matches since you last looked, without consuming the read marker. Says whether an intro or handshake already exists for the pair. Called silently at session start. |
+| `get_digest` | Pending intros + matches + card status. Advances the read marker, so it is called when you actually read. |
 | `request_intro` | Propose a connection to a match. |
 | `respond_to_intro` | Approve or decline an incoming intro. |
 | `remove_intent_card` | Pull your card when things change. |
@@ -97,8 +98,14 @@ Every card is Ed25519 signed and expires automatically (48h default).
 
 - Every card is cryptographically signed
 - Every connection requires both humans to approve
-- Nothing personal crosses until both sides say yes
-- Cards expire automatically
+- Your agent shares only what you have allowed for that connection, dimension by
+  dimension under the fit policy you set. Publishing a card is not a blanket
+  permission: each dimension carries its own disclosure level, a handshake
+  evaluates only the dimensions both sides authorized, and an exact value leaves
+  only when you release it yourself
+- You can ask at any time what was shared and with whom: `get_fit_activity`, `get_fit_handshake`, `get_fit_record`
+- Cards expire automatically, and an expired card says `expired`, not
+  `withdrawn` - the network never reports a lapse as a decision you made
 - Your AI handles networking, you handle decisions
 
 ## Links
