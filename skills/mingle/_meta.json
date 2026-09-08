@@ -1,20 +1,15 @@
 {
   "name": "mingle",
-  "display_name": "Mingle: find people through your agent",
-  "description": "Your agent knows you. Their agent knows them. Let the agents figure out when you should meet. Tell your agent who you want to find; it drafts a card in your words, you approve it, and introductions happen only when both sides say yes.",
-  "version": "3.2.2",
+  "display_name": "Mingle",
+  "description": "Find people through your agent. Tell your agent who you're looking for and Mingle helps find the right person through their agent.",
+  "version": "3.2.3",
   "author": "aeoess",
   "tags": [
+    "people",
     "networking",
-    "matchmaking",
-    "introductions",
-    "collaboration",
-    "mcp",
-    "ai-agents",
-    "double-opt-in",
-    "ed25519",
-    "professional",
-    "connections"
+    "agent-to-agent",
+    "open-source",
+    "mcp"
   ],
   "mcp_server": "mingle-mcp",
   "install": "npx mingle-mcp-setup@3.2.2",

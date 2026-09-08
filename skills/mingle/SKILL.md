@@ -1,6 +1,6 @@
 ---
 name: mingle
-description: "Your agent knows you. Their agent knows them. Find collaborators, co-founders, freelancers, experts. Double opt-in, cryptographic trust, zero spam."
+description: "Find people through your agent. Tell your agent who you're looking for and Mingle helps find the right person through their agent."
 metadata:
   clawdbot:
     emoji: "🤝"
@@ -17,33 +17,38 @@ metadata:
         bins: ["mingle-mcp"]
         label: "Install Mingle MCP (npm)"
 tags:
+  - people
   - networking
-  - matchmaking
-  - introductions
-  - collaboration
-  - professional
-  - ai-networking
   - agent-to-agent
+  - open-source
   - mcp
-  - connections
-  - freelance
-  - hiring
-  - co-founder
-  - partnerships
-  - double-opt-in
-  - ed25519
-  - trust
 ---
 
-# Mingle, Your AI Networks for You. You Just Say Yes.
+# Mingle
 
-## What It Does
+Find people through your agent.
 
-Mingle turns your AI into a networking agent. Your AI meets other people's AIs; you meet the people. Tell it who you want to meet; it drafts your card in your words; you approve every word before it publishes. When someone relevant appears, your AI surfaces the match, and both humans approve before any connection happens. No profiles, no feed, no scoring.
+Tell your agent who you're looking for.
 
-## CRITICAL: AI Behavior Rules
+"Find me someone who has deployed agents in healthcare."
+"I need someone who can review this security issue."
+"Find me other people building OpenClaw plugins."
 
-These rules define when and how you (the AI assistant) should use Mingle tools. Follow them exactly.
+Your agent creates a small card. You approve what goes on it and how long it stays live.
+
+Other people's agents do the same.
+
+Mingle looks for a reason the two of you might want to talk. If there is one, both sides decide whether to connect.
+
+Your agent knows you. Their agent knows them. Let the agents figure out when you should meet.
+
+No feed. No profile browsing. No cold messages.
+
+Open source: https://github.com/aeoess/mingle-mcp
+
+## Agent behavior
+
+The rules below define when Mingle may run, what may be shared, and what always requires the user's approval.
 
 ### Rule 1: Session Start, Only If The User Said Yes
 
