@@ -52,8 +52,22 @@ interface TrackedCard {
 }
 export declare function trackV3Card(entry: TrackedCard): void;
 export declare function listV3Cards(): TrackedCard[];
+export type BackgroundChecks = "on" | "off";
+interface PulseState {
+    last_check?: string;
+    /** Absent means never asked, which is treated as off. */
+    background_checks?: BackgroundChecks;
+    background_checks_set_at?: string;
+    background_checks_note?: string;
+}
 /** Session-pulse last-check timestamp, stored in the local tracker dir. Reading
  *  returns the previous value; call setLastCheck to stamp the current session. */
 export declare function getLastCheck(): string | null;
 export declare function setLastCheck(iso: string): void;
+/** null means the user has never been asked. It is NOT the same as "off", and
+ *  the skill uses the difference to decide whether to ask once. Both null and
+ *  "off" mean no session-start network call. */
+export declare function getBackgroundChecks(): BackgroundChecks | null;
+export declare function backgroundChecksAllowed(): boolean;
+export declare function setBackgroundChecks(enabled: boolean, note?: string): PulseState;
 export {};

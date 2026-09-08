@@ -45,10 +45,15 @@ Your AI networks for you. You just say yes. No app. No signup. No feed.
 ## Install
 
 ```
-npx mingle-mcp setup
+npx mingle-mcp-setup@3.2.2
 ```
 
-Restart your AI client. Works with Claude Desktop, Cursor, GPT, OpenClaw, and any MCP client.
+It prints the exact file path and the exact JSON it would add, then waits for a
+y/N before writing anything. It touches Claude Desktop and Cursor config and no
+other file. `--yes` accepts in advance for scripted installs. Any other MCP
+client works too, by copying the manual config below.
+
+Restart your AI client.
 
 <details>
 <summary>Manual config</summary>
@@ -67,12 +72,12 @@ Restart your AI client. Works with Claude Desktop, Cursor, GPT, OpenClaw, and an
 
 ## v2.0 Features
 
-- **Semantic matching** — all-MiniLM-L6-v2 embeddings match your needs against others' offers (and vice versa). Mutual matches get a bonus.
-- **Persistent identity** — Ed25519 keypair stored in `~/.mingle/identity.json`. Same key across sessions, same reputation.
-- **Ghost mode** — browse the network without publishing a card. See who's out there before making yourself visible.
-- **Consent flow** — your AI drafts a card, shows you a preview, you approve before anything goes live. Never auto-publishes.
-- **Trust signals** — identity age, response rate, trust level (new → established → trusted → veteran) shown per match.
-- **Feedback loop** — rate connections after meeting. Improves matching quality over time.
+- **Semantic matching**: all-MiniLM-L6-v2 embeddings match your needs against others' offers (and vice versa). Mutual matches get a bonus.
+- **Persistent identity**: Ed25519 keypair stored in `~/.mingle/identity.json`. Same key across sessions, same reputation.
+- **Ghost mode**: browse the network without publishing a card. See who's out there before making yourself visible.
+- **Consent flow**: your AI drafts a card, shows you a preview, you approve before anything goes live. Never auto-publishes.
+- **Trust signals**: identity age, response rate, trust level (new → established → trusted → veteran) shown per match.
+- **Feedback loop**: rate connections after meeting. Improves matching quality over time.
 - **Live network** at api.aeoess.com; the card count is whatever the API reports, not a number written here.
 
 ## Tools

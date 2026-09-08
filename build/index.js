@@ -10,7 +10,7 @@ import { z } from "zod";
 import { sign, canonicalize } from "agent-passport-system";
 import { createHash } from "node:crypto";
 import { loadIdentity, loadPreferences, cacheCard, clearCachedCard, classifyMatches, recordSurfaced } from "./identity.js";
-import { buildCard, cardContentHash, sealCard, explainVisibility, trackV3Card, listV3Cards, getLastCheck, setLastCheck } from "./v3.js";
+import { buildCard, cardContentHash, sealCard, explainVisibility, trackV3Card, listV3Cards, getLastCheck, setLastCheck, getBackgroundChecks, backgroundChecksAllowed, setBackgroundChecks } from "./v3.js";
 const SKILL_VERSION = "mingle-composer-v1";
 const API = process.env.MINGLE_API_URL || "https://api.aeoess.com";
 // Persistent identity — loaded from ~/.mingle/identity.json
@@ -532,6 +532,26 @@ for (const v of V3_VERBS) {
 // set is discoverable but does not silently pretend to act.
 server.tool("request_counterparty_deletion", "Ask counterparties who received your card to delete their copy. Phase 2 feature; not yet active. Counterparties may retain what they already received.", { card_id: z.string() }, async (a) => ({ content: [{ type: "text", text: JSON.stringify({ card_id: a.card_id, status: "not_available_p1", note: "request_counterparty_deletion ships in Mingle P2. In P1, delete_server_copy removes the server copy; retained counterparty copies are outside protocol reach." }, null, 2) }] }));
 // ══════════════════════════════════════════════════════════════
+// Background checks: an explicit, stored, revocable per-user yes
+// ══════════════════════════════════════════════════════════════
+// The session-start pulse used to run on its own in any session where Mingle
+// was connected. It now runs only if the user said it could, and that answer
+// lives in ~/.mingle/v3-pulse.json where they can read it, change it, or delete
+// it. Absent means never asked, which behaves as off.
+//
+// Tools carrying pulse:true are on the session-start path and refuse without
+// the preference. The SAME tool called without the flag is the user asking, and
+// runs as before: this gates automatic activity, not the user's own request.
+const PULSE_SKIPPED = {
+    skipped: true,
+    reason: "background_checks_off",
+    note: "No network call was made. The principal has not turned on session-start Mingle checks. Call set_background_checks with their explicit answer, or call this tool without pulse:true when they ask directly.",
+};
+/** True when a pulse-path call may touch the network. */
+function pulseAllowed(pulse) {
+    return pulse !== true || backgroundChecksAllowed();
+}
+// ══════════════════════════════════════════════════════════════
 // Card lifecycle vocabulary (v3.2.0 server contract)
 // ══════════════════════════════════════════════════════════════
 // The server used to write `withdrawn` for a card that had merely lapsed, so
@@ -594,8 +614,28 @@ const EXPIRY_NUDGE_DAYS = 5;
 // these reset when it does and nothing is written to disk or to the server.
 const nudgedThisSession = new Set();
 let surfacedPendingThisSession = false;
+// ── set_background_checks: the stored, revocable yes ──────────────────────
+server.tool("set_background_checks", "Record whether the principal allows Mingle to check the network at session start without being asked each time. This is their answer, not the assistant's inference: only call it when they have actually said yes or no. The answer is stored locally in ~/.mingle/v3-pulse.json, applies to every future session until changed, and can be turned off at any time by calling this again with enabled:false. With it off or never set, the session-start path makes no network call at all.", {
+    enabled: z.boolean().describe("true only if the principal said yes in this conversation"),
+    note: z.string().max(200).optional().describe("Optional: the principal's own words about the choice, stored verbatim"),
+}, async (a) => {
+    const state = setBackgroundChecks(a.enabled, a.note);
+    return asText({
+        background_checks: state.background_checks,
+        set_at: state.background_checks_set_at,
+        note: state.background_checks_note,
+        stored_at: "~/.mingle/v3-pulse.json",
+        say_back: a.enabled
+            ? "Background checks are on. At the start of a session I will check Mingle for new matches and mention one only if it looks worth your time. That sends your Mingle public key to api.aeoess.com and nothing else. Say stop checking Mingle any time and I will turn it off."
+            : "Background checks are off. I will not contact Mingle unless you ask me to.",
+    });
+});
 // ── get_card_status: v3 status for the principal's tracked cards ──────────
-server.tool("get_card_status", "Show the current server status of the v3 cards you have published (adapts the digest to v3 card types). Reads each tracked card_id and reports its revocation_status, what that status MEANS (expired = the clock ran out; withdrawn = the principal pulled it), how many days are left, and whether a card is close enough to expiry to mention once.", {}, async () => {
+server.tool("get_card_status", "Show the current server status of the v3 cards you have published (adapts the digest to v3 card types). Reads each tracked card_id and reports its revocation_status, what that status MEANS (expired = the clock ran out; withdrawn = the principal pulled it), how many days are left, and whether a card is close enough to expiry to mention once.", {
+    pulse: z.boolean().optional().describe("Set true ONLY for the automatic session-start check. With it set, the call is refused without a network request unless the principal turned background checks on. Omit it when the principal asked."),
+}, async (a) => {
+    if (!pulseAllowed(a.pulse))
+        return asText(PULSE_SKIPPED);
     const tracked = listV3Cards();
     const rows = [];
     for (const t of tracked.slice(0, 20)) {
@@ -658,6 +698,11 @@ server.tool("get_card_status", "Show the current server status of the v3 cards y
                     notifications,
                     previous_check,
                     expiry_nudge,
+                    // Visible local state: what the principal agreed to, and where it lives,
+                    // so "what is this thing allowed to do on its own" is answerable without
+                    // reading the source.
+                    background_checks: getBackgroundChecks() ?? "never_asked",
+                    background_checks_stored_at: "~/.mingle/v3-pulse.json",
                     status_rule: "expired means the card's own clock ran out; withdrawn means the principal deliberately pulled it. Offer to renew an expired card. Say nothing about a withdrawn one unless asked.",
                 }, null, 2) }] };
 });
@@ -886,7 +931,12 @@ server.tool("list_intros", "List your Mingle v3 introductions: incoming requests
 // "does not advance your seen window or your digest marker, so an agent can
 // poll it on a timer". This tool is that endpoint; get_digest stays the call
 // for when the principal actually reads.
-server.tool("check_pending_matches", "Check for new Mingle matches WITHOUT consuming the digest window: the same new-match set get_digest would show, but reading it does not advance the read marker, so the principal still sees them as new when they actually look. Call this silently at session start. Returns, per match, the counterpart's headline and their own quoted words, an overlap summary (never a score), and whether an introduction or a fit handshake already exists for that pair. Surfacing is the assistant's job and the rule is one per session: use suggest_one. Never starts a handshake.", { include_all: z.boolean().optional().describe("Set true only when the principal asked to see everything; otherwise suggest_one carries the single match to mention.") }, async (a) => {
+server.tool("check_pending_matches", "Check for new Mingle matches WITHOUT consuming the digest window: the same new-match set get_digest would show, but reading it does not advance the read marker, so the principal still sees them as new when they actually look. Call this silently at session start. Returns, per match, the counterpart's headline and their own quoted words, an overlap summary (never a score), and whether an introduction or a fit handshake already exists for that pair. Surfacing is the assistant's job and the rule is one per session: use suggest_one. Never starts a handshake.", {
+    include_all: z.boolean().optional().describe("Set true only when the principal asked to see everything; otherwise suggest_one carries the single match to mention."),
+    pulse: z.boolean().optional().describe("Set true ONLY for the automatic session-start check. With it set, the call is refused without a network request unless the principal turned background checks on. Omit it when the principal asked."),
+}, async (a) => {
+    if (!pulseAllowed(a.pulse))
+        return asText(PULSE_SKIPPED);
     try {
         const nonce = newNonce();
         const params = new URLSearchParams({

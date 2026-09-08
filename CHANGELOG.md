@@ -1,3 +1,41 @@
+## 3.2.2 - 2026-09-08
+
+Answers the ClawHub security review of 3.2.1 (outcome: Review). Two findings.
+
+**T01, silent session-start network calls.** The skill told the agent to call
+Mingle at the start of every session where Mingle was connected, without asking
+anyone. That is now an explicit, stored, revocable per-user choice.
+
+- New tool `set_background_checks`. The answer is stored in
+  `~/.mingle/v3-pulse.json` as `background_checks`, next to the read marker that
+  was already there rather than in a second store. Absent until the user answers,
+  and absent behaves as off.
+- `check_pending_matches` and `get_card_status` take a `pulse: true` flag. That
+  flag marks a call as the automatic session-start one, and with the preference
+  off or unset those calls return `{ skipped: true, reason:
+  "background_checks_off" }` and make no network request at all. Called without
+  the flag, which is the user asking, they behave exactly as before.
+- Rule 1 and the session-pulse section now state the same condition in the same
+  words: a live card AND background checks on. They disagreed before, which is
+  what the audit caught.
+- The agent asks once, ever, and only when there is a live card. No answer is
+  not a yes. "Stop checking Mingle" turns it off.
+- The skill states what a check sends: the user's Mingle public key, to
+  api.aeoess.com, nothing else. `get_card_status` reports the current setting and
+  where it is stored, so the state is visible without reading source.
+
+**T08, unpinned installer that edits client config.** The setup command is
+`npx mingle-mcp-setup@3.2.2` everywhere, pinned.
+
+- `mingle-mcp-setup` now prints the exact path of every file it would change and
+  the exact JSON it would add, then waits for y/N. Nothing is written before the
+  answer. `--yes` accepts in advance for scripted installs; with no terminal and
+  no `--yes` it refuses and exits 1 rather than writing unattended.
+- It names the two clients it touches, Claude Desktop and Cursor, and touches
+  nothing else. The header comment claimed Windsurf, which it never configured.
+- The `postinstall` lifecycle script is removed. It printed a line and was not
+  needed to install anything.
+
 # Changelog
 
 Releases were previously recorded only in the release commit subject; this file

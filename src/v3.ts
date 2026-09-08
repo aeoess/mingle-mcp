@@ -126,14 +126,63 @@ export function listV3Cards(): TrackedCard[] {
   try { return JSON.parse(readFileSync(V3_CARDS_PATH, "utf-8")); } catch { return []; }
 }
 
+// ── Session-pulse state: ~/.mingle/v3-pulse.json ──────────────────────────
+// One file, two things: the last-check timestamp and the background-checks
+// preference. The preference lives here rather than in a second store so a user
+// clearing ~/.mingle clears everything the agent remembers about them, and so
+// there is exactly one place to look when asking "what did I agree to".
+
+export type BackgroundChecks = "on" | "off";
+
+interface PulseState {
+  last_check?: string;
+  /** Absent means never asked, which is treated as off. */
+  background_checks?: BackgroundChecks;
+  background_checks_set_at?: string;
+  background_checks_note?: string;
+}
+
+function readPulse(): PulseState {
+  if (!existsSync(V3_PULSE_PATH)) return {};
+  try { return JSON.parse(readFileSync(V3_PULSE_PATH, "utf-8")) as PulseState; } catch { return {}; }
+}
+
+/** Merge, never replace: writing the timestamp must not silently drop the
+ *  preference the user set, and writing the preference must not lose the
+ *  read marker. */
+function writePulse(patch: Partial<PulseState>): PulseState {
+  if (!existsSync(MINGLE_DIR)) mkdirSync(MINGLE_DIR, { recursive: true });
+  const next = { ...readPulse(), ...patch };
+  writeFileSync(V3_PULSE_PATH, JSON.stringify(next, null, 2));
+  return next;
+}
+
 /** Session-pulse last-check timestamp, stored in the local tracker dir. Reading
  *  returns the previous value; call setLastCheck to stamp the current session. */
 export function getLastCheck(): string | null {
-  if (!existsSync(V3_PULSE_PATH)) return null;
-  try { return JSON.parse(readFileSync(V3_PULSE_PATH, "utf-8")).last_check ?? null; } catch { return null; }
+  return readPulse().last_check ?? null;
 }
 
 export function setLastCheck(iso: string): void {
-  if (!existsSync(MINGLE_DIR)) mkdirSync(MINGLE_DIR, { recursive: true });
-  writeFileSync(V3_PULSE_PATH, JSON.stringify({ last_check: iso }, null, 2));
+  writePulse({ last_check: iso });
+}
+
+/** null means the user has never been asked. It is NOT the same as "off", and
+ *  the skill uses the difference to decide whether to ask once. Both null and
+ *  "off" mean no session-start network call. */
+export function getBackgroundChecks(): BackgroundChecks | null {
+  const v = readPulse().background_checks;
+  return v === "on" || v === "off" ? v : null;
+}
+
+export function backgroundChecksAllowed(): boolean {
+  return getBackgroundChecks() === "on";
+}
+
+export function setBackgroundChecks(enabled: boolean, note?: string): PulseState {
+  return writePulse({
+    background_checks: enabled ? "on" : "off",
+    background_checks_set_at: new Date().toISOString(),
+    ...(note !== undefined ? { background_checks_note: note } : {}),
+  });
 }
