@@ -3,8 +3,8 @@
 Find people through your agent. Your agent knows you, their agent knows them;
 introductions happen only when both sides say yes.
 
-This directory is an [Agent Plugins 1.0.0](https://agent-plugins.org) bundle.
-OpenClaw detects it from the root `plugin.json` and maps its contents into
+This directory is an [Codex bundle layout](https://agent-plugins.org) bundle.
+OpenClaw detects it from the root `.codex-plugin/plugin.json` and maps its contents into
 native features (`docs/plugins/bundles.md:294`, `:215-247`).
 
 The headings below match the ClawSweeper handoff checklist on
@@ -12,7 +12,7 @@ The headings below match the ClawSweeper handoff checklist on
 
 ## Package metadata and manifest
 
-`plugin.json` at the bundle root is the manifest. It is strict JSON, not JSON5
+`.codex-plugin/plugin.json` at the bundle root is the manifest. It is strict JSON, not JSON5
 (`docs/plugins/bundles.md:223`).
 
 | Field | Value |
@@ -27,7 +27,7 @@ The headings below match the ClawSweeper handoff checklist on
 OpenClaw requires a non-empty `name`; every other manifest field is optional and
 unknown fields are ignored (`docs/plugins/bundles.md:223-225`). The `$schema`
 value is not decoration: `detectBundleManifestFormat` returns the `agent` format
-only when `plugin.json` carries exactly that string
+only when `.codex-plugin/plugin.json` carries exactly that string
 (`src/plugins/bundle-manifest.ts:542-552`).
 
 A `package.json` sits beside it. It carries no `openclaw` key, so detection still
@@ -56,7 +56,7 @@ bundle contributes two things:
    (`docs/plugins/bundles.md:225-227`). `skills/mingle/SKILL.md` carries the
    behavior rules that tell an agent when to reach for Mingle tools, and
    `skills/mingle/_meta.json` carries the listing metadata.
-2. **An MCP server**, declared in `mcp.json`. The process entrypoint is the
+2. **An MCP server**, declared in `.mcp.json`. The process entrypoint is the
    stdio command in that file: `npx -y mingle-mcp@3.2.0`. OpenClaw merges bundle
    MCP config into the effective embedded settings as `mcpServers` and launches
    the stdio server during embedded agent turns
@@ -80,7 +80,7 @@ stdio example above it (`:120-134`) is the native OpenClaw shape, but
 (`src/plugins/bundle-mcp.ts:281-284`), and the reference fixture in
 `scripts/agent-plugin-gateway-e2e.ts:190-196` declares it. Allowed keys on a
 stdio entry are exactly `type`, `command`, `args`, `env`, `cwd`
-(`src/plugins/bundle-mcp.ts:73`); the top level of `mcp.json` allows only
+(`src/plugins/bundle-mcp.ts:73`); the top level of `.mcp.json` allows only
 `$schema` and `mcpServers` (`:72`).
 
 ## Install
@@ -97,7 +97,7 @@ openclaw plugins install clawhub:mingle@3.2.0
 Verify detection, then restart the gateway so the mapped features load:
 
 ```bash
-openclaw plugins list        # Format: bundle, Bundle format: agent (Agent Plugins)
+openclaw plugins list        # Format: bundle, Bundle format: codex
 openclaw plugins inspect mingle
 openclaw gateway restart
 ```
@@ -119,7 +119,7 @@ An unversioned ClawHub install keeps an unversioned recorded spec, so
 `openclaw plugins update` follows newer releases; an explicit `@<version>`
 selector stays pinned to that selector (`docs/cli/plugins.md:322`).
 
-Because `mcp.json` pins `mingle-mcp@3.2.0`, updating the npm package alone does
+Because `.mcp.json` pins `mingle-mcp@3.2.0`, updating the npm package alone does
 not change what OpenClaw launches. A new server version ships as a new bundle
 version with the pin bumped.
 
@@ -155,14 +155,14 @@ or delete that file to move or reset an identity. Three sibling files in the sam
 directory hold non-secret local state: `last-card.json`, `preferences.json`, and
 `cooldowns.json`.
 
-`mcp.json` declares one environment variable, and it is the only one the server
+`.mcp.json` declares one environment variable, and it is the only one the server
 reads:
 
 | Variable | Purpose | Default |
 | --- | --- | --- |
 | `MINGLE_API_URL` | Base URL for the Mingle network API | `https://api.aeoess.com` |
 
-It is set explicitly in `mcp.json` to the production default so the launch is
+It is set explicitly in `.mcp.json` to the production default so the launch is
 self-describing. Override it only to point at a different deployment.
 
 OpenClaw additionally supplies `PLUGIN_ROOT` and `PLUGIN_DATA` to stdio servers

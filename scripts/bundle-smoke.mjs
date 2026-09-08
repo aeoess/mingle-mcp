@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Mingle bundle smoke proof.
-// Launches the MCP server exactly as openclaw-bundle/mcp.json declares it
+// Launches the MCP server exactly as openclaw-bundle/.mcp.json declares it
 // (same command, args, env) and asks it for tools/list over stdio JSON-RPC.
 // Exits 0 only when the handshake succeeds and the tool count matches
 // skills/mingle/_meta.json "tools".
@@ -22,12 +22,12 @@ cpSync(sourceBundle, join(stage, "openclaw-bundle"), { recursive: true });
 const bundleRoot = join(stage, "openclaw-bundle");
 process.on("exit", () => rmSync(stage, { recursive: true, force: true }));
 console.log(`staged plugin root: ${bundleRoot}`);
-const mcp = JSON.parse(readFileSync(join(bundleRoot, "mcp.json"), "utf-8"));
+const mcp = JSON.parse(readFileSync(join(bundleRoot, ".mcp.json"), "utf-8"));
 const meta = JSON.parse(readFileSync(join(root, "skills", "mingle", "_meta.json"), "utf-8"));
 const expected = meta.tools;
 
 const entry = mcp.mcpServers.mingle;
-if (!entry) fail("mcp.json has no mcpServers.mingle entry");
+if (!entry) fail(".mcp.json has no mcpServers.mingle entry");
 
 // PLUGIN_ROOT / PLUGIN_DATA are supplied by OpenClaw for Agent Plugins stdio
 // servers (docs/plugins/bundles.md). Reproduce them here so the launch matches.
@@ -40,12 +40,12 @@ const env = { ...process.env, PLUGIN_ROOT: bundleRoot, PLUGIN_DATA: pluginData }
 for (const [k, v] of Object.entries(entry.env ?? {})) env[k] = expand(v);
 
 console.log(`launching: ${entry.command} ${args.join(" ")}`);
-console.log(`env from mcp.json: ${JSON.stringify(entry.env ?? {})}`);
+console.log(`env from .mcp.json: ${JSON.stringify(entry.env ?? {})}`);
 
-// mcp.json declares no cwd, so OpenClaw defaults it to the plugin root
-// (src/plugins/bundle-mcp.ts:151-157, baseDir = dirname(mcp.json) at :427).
+// .mcp.json declares no cwd, so OpenClaw defaults it to the plugin root
+// (src/plugins/bundle-mcp.ts:151-157, baseDir = dirname(.mcp.json) at :427).
 const cwd = entry.cwd ? expand(entry.cwd) : bundleRoot;
-console.log(`cwd: ${cwd} (plugin root; mcp.json declares no cwd)`);
+console.log(`cwd: ${cwd} (plugin root; .mcp.json declares no cwd)`);
 
 const child = spawn(entry.command, args, { cwd, env, stdio: ["pipe", "pipe", "pipe"] });
 

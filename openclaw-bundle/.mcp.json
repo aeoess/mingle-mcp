@@ -1,10 +1,11 @@
 {
-  "$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
   "mcpServers": {
     "mingle": {
-      "type": "stdio",
       "command": "npx",
-      "args": ["-y", "mingle-mcp@3.2.0"],
+      "args": [
+        "-y",
+        "mingle-mcp@3.2.0"
+      ],
       "env": {
         "MINGLE_API_URL": "https://api.aeoess.com"
       }

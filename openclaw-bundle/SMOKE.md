@@ -9,7 +9,7 @@ npm run bundle:smoke
 ## What this proves, and what it does not
 
 **What it proves.** The MCP half. The script launches the server exactly the way
-`openclaw-bundle/mcp.json` declares it, completes an MCP `initialize` handshake
+`openclaw-bundle/.mcp.json` declares it, completes an MCP `initialize` handshake
 over stdio, calls `tools/list`, and asserts that the tool count matches the
 `tools` field in `skills/mingle/_meta.json`. It exits nonzero on any mismatch, so
 the metadata and the running server cannot drift apart silently.
@@ -26,7 +26,7 @@ $ node openclaw.mjs plugins list      (row)
 Mingle | mingle | bundle | enabled | global:mingle | 3.2.0
 $ node openclaw.mjs plugins inspect mingle
 Format: bundle
-Bundle format: agent (Agent Plugins)
+Bundle format: codex
 Bundle capabilities: skills, mcpServers
 MCP servers:
 mingle
@@ -39,13 +39,13 @@ install: `--force` (source outside ClawHub review) and `--accept-capabilities`
 
 ## How the launch matches mcp.json
 
-- Command, args, and env come from `mcpServers.mingle` in `openclaw-bundle/mcp.json`.
+- Command, args, and env come from `mcpServers.mingle` in `openclaw-bundle/.mcp.json`.
 - `PLUGIN_ROOT` and `PLUGIN_DATA` are set, and `${PLUGIN_ROOT}` / `${PLUGIN_DATA}`
   are expanded in `args`, `env` values, and `cwd`, matching
   `docs/plugins/bundles.md:231-235`. Mingle uses neither placeholder.
-- `mcp.json` declares no `cwd`, so the script uses the plugin root, which is what
+- `.mcp.json` declares no `cwd`, so the script uses the plugin root, which is what
   OpenClaw defaults to (`src/plugins/bundle-mcp.ts:151-157`, with `baseDir` set to
-  the directory holding `mcp.json` at `:427`).
+  the directory holding `.mcp.json` at `:427`).
 - The bundle is staged into a temp directory outside `~/mingle-mcp` first. This is
   not cosmetic: run from inside the repo, `npx` walks up to the repo's own
   `package.json` (also named `mingle-mcp`), decides the package is already local,
@@ -121,7 +121,7 @@ stale and is corrected in the same commit that adds this bundle. The count was
 taken from the running server, twice, from two independent sources:
 
 - `npx -y mingle-mcp@3.2.0` (the published npm artifact, which is what
-  `mcp.json` pins): 45 tools.
+  `.mcp.json` pins): 45 tools.
 - `node build/bin.js` built from this checkout at `35e3beb`: 45 tools.
 
 Both lists are identical. `bundle:smoke` now asserts against `_meta.json`, so the

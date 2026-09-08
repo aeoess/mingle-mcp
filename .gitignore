@@ -9,3 +9,7 @@ dist/
 
 # clawhub package validate output
 reports/
+
+# validator output
+openclaw-bundle/reports/
+reports/
