@@ -491,7 +491,7 @@ function argsToCard(cardType: "connection" | "opportunity", a: any): Record<stri
   return buildCard(build);
 }
 
-const COMPOSE_DESC = "Step 1 of publishing. Build the exact card the principal approves. Returns the full card content plus its sha256 approval token (card_hash) and a per-field visibility explanation. Nothing is published. Show the rendered card to the principal, then call the matching publish tool echoing card_hash back once they say yes.";
+const COMPOSE_DESC = "Step 1 of publishing a card, and of updating a live one. Build the exact card the principal approves. Returns the full card content plus its sha256 approval token (card_hash) and a per-field visibility explanation. Nothing is published. Show the rendered card to the principal, then, once they say yes, call the matching publish tool for a new card or replace_card for an update, echoing card_hash back.";
 
 for (const cardType of ["connection", "opportunity"] as const) {
   server.tool(
@@ -506,7 +506,7 @@ for (const cardType of ["connection", "opportunity"] as const) {
         card,
         card_hash,
         visibility_explained: explainVisibility(card),
-        note: `To publish, call publish_${cardType}_card with this exact card and approved_hash="${card_hash}". Any edit changes the hash and needs re-approval.`,
+        note: `To publish, call publish_${cardType}_card with this exact card and approved_hash="${card_hash}". To update one of your live cards instead, call replace_card with that card's card_id, this exact card and the same approved_hash. Any edit changes the hash and needs re-approval.`,
       }, null, 2) }] };
     },
   );
@@ -534,6 +534,37 @@ for (const cardType of ["connection", "opportunity"] as const) {
     },
   );
 }
+
+// ── replace_card: update a live card, the old version superseded in the same step ──
+
+server.tool(
+  "replace_card",
+  "Update one of your live Mingle v3 cards. Compose the new version with compose_connection_card or compose_opportunity_card and show it to the principal. Once they approve it, call replace_card with the card_id being replaced, the exact card returned by compose and its card_hash as approved_hash. The new card goes live and the old one is marked superseded in the same step, so an update never leaves the old version live beside the new one. A card edited after approval is refused, so only approved content is published. Only an active card you own can be replaced.",
+  {
+    card_id: z.string().describe("The card_id of your live card that the new version replaces"),
+    card: z.any().describe("The exact card object returned by compose"),
+    approved_hash: z.string().describe("The card_hash the principal approved"),
+  },
+  async (a) => {
+    try {
+      const card = a.card as Record<string, any>;
+      if (!card || (card.card_type !== "connection" && card.card_type !== "opportunity")) {
+        return { content: [{ type: "text" as const, text: "card must be a composed connection or opportunity card" }], isError: true };
+      }
+      const recomputed = cardContentHash(card);
+      if (recomputed !== a.approved_hash) {
+        return { content: [{ type: "text" as const, text: `Approval mismatch: the card content changed since it was approved (approved ${a.approved_hash}, now ${recomputed}). Re-run compose and re-approve.` }], isError: true };
+      }
+      const sealed = sealCard(card, keys.privateKey);
+      const result = await api(`/api/v3/cards/${encodeURIComponent(a.card_id)}/replace`, { method: "POST", body: JSON.stringify({ card: sealed }) });
+      if (result.error) return { content: [{ type: "text" as const, text: `Failed: ${result.error}` }], isError: true };
+      trackV3Card({ card_id: result.new_card_id, card_type: String(card.card_type), headline: String(card.headline), card_hash: recomputed, published_at: new Date().toISOString() });
+      return { content: [{ type: "text" as const, text: JSON.stringify({ replaced: true, new_card_id: result.new_card_id, superseded: result.superseded, card_hash: result.card_hash, expires_at: result.expires_at }, null, 2) }] };
+    } catch (e: any) {
+      return { content: [{ type: "text" as const, text: `Network error: ${e.message}` }], isError: true };
+    }
+  },
+);
 
 // ── search_cards: explicit fields plus semantic over published text ──────
 
@@ -805,7 +836,7 @@ server.tool(
 
 server.tool(
   "renew_card",
-  "Renew one of your Mingle v3 cards before it expires: re-sign the exact same content with a fresh expiry, which supersedes the old version. The content does not change, so no new approval is needed (use compose and publish to change a card). Two steps: without confirm it previews; with confirm:true it renews.",
+  "Renew one of your Mingle v3 cards before it expires: re-sign the exact same content with a fresh expiry, which supersedes the old version. The content does not change, so no new approval is needed (to change a live card, compose the new version and use replace_card). Two steps: without confirm it previews; with confirm:true it renews.",
   {
     card_id: z.string().describe("The card_id to renew (one of your active cards)"),
     ttl_days: z.number().int().min(1).max(60).optional().describe("Days until the renewed card expires (default 21)"),

@@ -11,14 +11,14 @@
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { createServer, type Server } from "node:http";
-import { mkdtempSync, rmSync, existsSync } from "node:fs";
+import { mkdtempSync, rmSync, existsSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createHash } from "node:crypto";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
-import { canonicalize } from "agent-passport-system";
+import { canonicalize, verify } from "agent-passport-system";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const fakeHome = mkdtempSync(join(tmpdir(), "mingle-tools-home-"));
@@ -159,6 +159,50 @@ test("set_notifications sends only the prefs the principal named", async () => {
   mark = seen.length;
   await callTool("set_notifications", { email: "p@example.com", prefs: { new_match: false } });
   assert.deepEqual(subscribeBody(mark).prefs, { new_match: false });
+});
+
+test("replace_card replaces a live card with the composed card the principal approved", async () => {
+  const composed = await callTool("compose_connection_card", {
+    headline: "Protocol engineer, now looking for a cofounder",
+    intents: ["cofound"],
+    seeking: [{ description: "A cofounder for agent identity tooling" }],
+  });
+  assert.equal(composed.isError, false, JSON.stringify(composed.out));
+  const { card, card_hash } = composed.out;
+  assert.match(composed.out.note, /replace_card/, "compose says how to use the card for an update");
+
+  routes.set("POST /api/v3/cards/card-old/replace", (s) => ({
+    replaced: true, new_card_id: "card-new", superseded: "card-old",
+    card_hash: s.body.card.approval.card_hash, expires_at: s.body.card.expires_at, revocation_status: "active",
+  }));
+
+  // A card edited after approval is refused before anything is sent.
+  let mark = seen.length;
+  const tampered = await callTool("replace_card", { card_id: "card-old", card: { ...card, headline: "edited after approval" }, approved_hash: card_hash });
+  assert.equal(tampered.isError, true);
+  assert.match(String(tampered.out), /Approval mismatch/);
+  assert.equal(seen.slice(mark).some((s) => s.path.endsWith("/replace")), false, "nothing is sent for a mismatched hash");
+
+  mark = seen.length;
+  const r = await callTool("replace_card", { card_id: "card-old", card, approved_hash: card_hash });
+  assert.equal(r.isError, false, JSON.stringify(r.out));
+  const sent = seen.slice(mark).find((s) => s.path === "/api/v3/cards/card-old/replace");
+  assert.ok(sent, "the replacement goes to the replace route of that card");
+  const identity = JSON.parse(readFileSync(join(fakeHome, ".mingle", "identity.json"), "utf-8"));
+  assert.equal(sent.body.card.subject_key, identity.publicKey);
+  assert.equal(sent.body.card.approval.card_hash, card_hash, "the approval binds the exact hash the principal approved");
+  const { signature, ...unsigned } = sent.body.card;
+  assert.equal(verify(canonicalize(unsigned), signature, identity.publicKey), true, "the card is signed by the principal's key");
+  assert.deepEqual({ replaced: r.out.replaced, new_card_id: r.out.new_card_id, superseded: r.out.superseded }, { replaced: true, new_card_id: "card-new", superseded: "card-old" });
+  const tracked = JSON.parse(readFileSync(join(fakeHome, ".mingle", "v3-cards.json"), "utf-8"));
+  assert.equal(tracked[0].card_id, "card-new", "the new card is tracked locally");
+});
+
+test("renew_card points updates at replace_card, not at compose and publish", async () => {
+  const { tools } = await client.listTools();
+  const renew = tools.find((t) => t.name === "renew_card");
+  assert.ok(renew?.description?.includes("replace_card"), renew?.description);
+  assert.equal(renew?.description?.includes("compose and publish"), false);
 });
 
 test("approve_first_step preview returns half_a and half_b byte-exact", async () => {

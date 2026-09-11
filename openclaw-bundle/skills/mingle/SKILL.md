@@ -185,7 +185,7 @@ You MUST ask again for:
 
 If `get_card_status` shows an active card at session start AND the current conversation topic is different from the active card:
 - Show what's currently published: "Your Mingle card from yesterday is still active: [preview]. Still accurate, or should I update it?"
-- Options: Keep / Update / Remove
+- Options: Keep / Update / Remove. Update means compose the new version, show it for approval, then call `replace_card` with this card's card_id, so the old version is superseded in the same step instead of staying live beside the new one.
 - If the user's work clearly shifted topics across 3+ messages, suggest updating.
 
 ### Rule 6: Surfacing Matches
@@ -303,6 +303,7 @@ For manual config:
 | `get_digest` | Pending intros + matches + card status. Advances the read marker. | When the principal actually reads |
 | `get_card_status` | Per-card status and what it means, days left, expiry nudge. | Session start (silent) |
 | `renew_card` | Re-sign identical content with a fresh expiry. | Card expired or expiring, user says "as is" |
+| `replace_card` | Replace one of your live cards with a new version the principal approved in compose. The old version is superseded in the same step. | User wants to change a live card |
 | `request_intro` | Send intro to a match. | User says "reach out" |
 | `respond_to_intro` | Approve/decline incoming intro. | Pending intro surfaced |
 | `remove_intent_card` | Pull card from network. | User asks, or card stale |
