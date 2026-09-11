@@ -183,10 +183,14 @@ You MUST ask again for:
 
 ### Rule 5: Returning User with Active Card
 
-If `get_card_status` shows an active card at session start AND the current conversation topic is different from the active card:
+This runs only inside the Rule 1 gate: the user has a live card AND `background_checks` is `on`. With the gate closed, check nothing at session start, and raise this only when the user asks about Mingle or their card.
+
+Inside the gate, if the session-start pulse (`get_card_status` with `pulse: true`) shows an active card AND the current conversation topic is different from the active card:
 - Show what's currently published: "Your Mingle card from yesterday is still active: [preview]. Still accurate, or should I update it?"
 - Options: Keep / Update / Remove. Update means compose the new version, show it for approval, then call `replace_card` with this card's card_id, so the old version is superseded in the same step instead of staying live beside the new one.
 - If the user's work clearly shifted topics across 3+ messages, suggest updating.
+
+Never call `get_digest` at session start for this. It advances the read marker, so it waits until the user actually reads (Rule 1).
 
 ### Rule 6: Surfacing Matches
 
@@ -299,9 +303,9 @@ For manual config:
 |------|-------------|--------------|
 | `publish_intent_card` | Publish/update your card. Returns top matches. | After user approves a draft |
 | `search_matches` | Find relevant people. Works without a card (ghost mode). | User asks, or ghost browsing |
-| `check_pending_matches` | New matches without consuming the read marker, plus whether an intro or handshake already exists for the pair. | Session start (silent) |
+| `check_pending_matches` | New matches without consuming the read marker, plus whether an intro or handshake already exists for the pair. | Session start, only inside the Rule 1 gate, with pulse: true |
 | `get_digest` | Pending intros + matches + card status. Advances the read marker. | When the principal actually reads |
-| `get_card_status` | Per-card status and what it means, days left, expiry nudge. | Session start (silent) |
+| `get_card_status` | Per-card status and what it means, days left, expiry nudge. | Session start, only inside the Rule 1 gate, with pulse: true |
 | `renew_card` | Re-sign identical content with a fresh expiry. | Card expired or expiring, user says "as is" |
 | `replace_card` | Replace one of your live cards with a new version the principal approved in compose. The old version is superseded in the same step. | User wants to change a live card |
 | `request_intro` | Send intro to a match. | User says "reach out" |
@@ -317,10 +321,12 @@ For manual config:
 > User: "Sure"
 > AI: [calls search_matches with query_needs=["React developer"]] "Found 3 people offering React expertise. [shows results]. Want me to publish your card so they can find you too?"
 
-**Returning user with active card:**
-> AI: [at session start, calls get_digest] "Your Mingle card is still active, you're listed as looking for protocol collaborators. Also, you have 1 intro request waiting."
-> User: "Show me"
-> AI: "Alex, a security consultant, wants to connect. They specialize in agent system audits. Their message: 'I'd love to review your protocol.' Approve?"
+**Returning user with active card (background checks on):**
+> AI: [at session start, inside the Rule 1 gate, calls check_pending_matches and get_card_status with pulse: true] "Your Mingle card is still active, you're listed as looking for protocol collaborators."
+> User: "Anything waiting for me on Mingle?"
+> AI: [the user is reading now, so calls get_digest, then list_intros] "You have 1 intro request. Alex, a security consultant, wants to connect. They specialize in agent system audits. Their note: 'I'd love to review your protocol.' Approve?"
+
+With background checks off or unset, the AI makes no Mingle call at session start and says nothing about Mingle until the user asks.
 
 **Natural suggestion during work:**
 > User: [after 5 messages about a stuck React performance issue]
