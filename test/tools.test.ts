@@ -161,6 +161,15 @@ test("set_notifications sends only the prefs the principal named", async () => {
   assert.deepEqual(subscribeBody(mark).prefs, { new_match: false });
 });
 
+test("set_notifications reports the server's verified state, so a pref update on a confirmed address says so", async () => {
+  routes.set("POST /api/v3/notifications/subscribe", () => ({ subscribed: true, verified: true, confirmation_sent: false, email_enabled: true, prefs: { intro_request: true, intro_accepted: true, weekly_digest: false, new_match: true } }));
+  const r = await callTool("set_notifications", { email: "p@example.com", prefs: { new_match: true } });
+  assert.equal(r.isError, false, JSON.stringify(r.out));
+  assert.equal(r.out.verified, true);
+  assert.match(r.out.note, /already confirmed/);
+  assert.equal(/Notifications start only after you confirm/.test(r.out.note), false);
+});
+
 test("replace_card replaces a live card with the composed card the principal approved", async () => {
   const composed = await callTool("compose_connection_card", {
     headline: "Protocol engineer, now looking for a cofounder",

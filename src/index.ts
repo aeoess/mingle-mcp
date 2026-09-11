@@ -836,7 +836,7 @@ server.tool(
 
 server.tool(
   "renew_card",
-  "Renew one of your Mingle v3 cards before it expires: re-sign the exact same content with a fresh expiry, which supersedes the old version. The content does not change, so no new approval is needed (to change a live card, compose the new version and use replace_card). Two steps: without confirm it previews; with confirm:true it renews.",
+  "Renew one of your Mingle v3 cards before it expires: re-sign the exact same content with a fresh expiry, which supersedes the old version. The content does not change, so no new approval is needed (to change a live card, compose the new version and use replace_card). Two steps. Without confirm it previews. With confirm:true it renews.",
   {
     card_id: z.string().describe("The card_id to renew (one of your active cards)"),
     ttl_days: z.number().int().min(1).max(60).optional().describe("Days until the renewed card expires (default 21)"),
@@ -919,13 +919,18 @@ server.tool(
       if (Object.keys(named).length > 0) body.prefs = named;
       const result = await api("/api/v3/notifications/subscribe", { method: "POST", body: JSON.stringify(body) });
       if (result.error) return { content: [{ type: "text" as const, text: `Failed: ${result.error}` }], isError: true };
+      // A pref update on an address that is already confirmed stays confirmed,
+      // so the note follows the server's stored state, not a fixed value.
+      const verified = result.verified === true;
       return { content: [{ type: "text" as const, text: JSON.stringify({
         subscribed: true,
-        verified: false,
+        verified,
         prefs: result.prefs ?? null,
-        note: result.email_enabled
-          ? "Check your inbox for a confirmation link. Notifications start only after you confirm. Your email is never shown to anyone."
-          : "Saved. Email delivery is not configured on the server yet, so no confirmation was sent; nothing will send until an operator enables it.",
+        note: verified
+          ? "Preferences saved. This address is already confirmed, so nothing else is needed."
+          : result.email_enabled
+            ? "Check your inbox for a confirmation link. Notifications start only after you confirm. Your email is never shown to anyone."
+            : "Saved. Email delivery is not configured on the server yet, so no confirmation was sent; nothing will send until an operator enables it.",
       }, null, 2) }] };
     } catch (e: any) {
       return { content: [{ type: "text" as const, text: `Network error: ${e.message}` }], isError: true };
