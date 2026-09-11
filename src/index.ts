@@ -854,7 +854,7 @@ server.tool(
 
 server.tool(
   "set_notifications",
-  "Turn Mingle email notifications on or off. Your email is stored server-side for notifications only, verified by a confirmation link before anything sends, never shown to anyone or placed on any card, and removable anytime. Pass an email to subscribe (you will get a confirmation link), or off:true to unsubscribe. Optional prefs choose which events email you.",
+  "Turn Mingle email notifications on or off. Your email is stored server-side for notifications only, verified by a confirmation link before anything sends, never shown to anyone or placed on any card, and removable anytime. Pass an email to subscribe (you will get a confirmation link), or off:true to unsubscribe. Optional prefs choose which of four events email you: intro_request (someone asks to connect), intro_accepted (an intro you are part of was accepted, or completed with contacts shared), weekly_digest (a weekly summary of new matches) and new_match (a new match for one of your cards). A new subscription starts with intro_request and intro_accepted on and the other two off. Name only the prefs the principal actually chose. Any pref you leave out keeps its current value.",
   {
     email: z.string().email().optional().describe("Email to receive notifications; you will get a confirmation link"),
     off: z.boolean().optional().describe("true to unsubscribe and delete your stored email"),
@@ -862,7 +862,8 @@ server.tool(
       intro_request: z.boolean().optional(),
       intro_accepted: z.boolean().optional(),
       weekly_digest: z.boolean().optional(),
-    }).optional().describe("Which emails you get: intro_request and intro_accepted default on; weekly_digest (a weekly summary of new matches) defaults off"),
+      new_match: z.boolean().optional(),
+    }).optional().describe("Only the prefs the principal named. intro_request and intro_accepted start on, weekly_digest and new_match start off, and an omitted pref keeps its stored value"),
   },
   async (args) => {
     try {
@@ -881,12 +882,16 @@ server.tool(
         subject_key: keys.publicKey, email: args.email, nonce,
         signature: sign(`${args.email}:${nonce}`, keys.privateKey),
       };
-      if (args.prefs) body.prefs = args.prefs;
+      // Send only what the principal named. The server merges it over what is
+      // stored, so a full set built here would silently reset the rest.
+      const named = Object.fromEntries(Object.entries(args.prefs ?? {}).filter(([, v]) => typeof v === "boolean"));
+      if (Object.keys(named).length > 0) body.prefs = named;
       const result = await api("/api/v3/notifications/subscribe", { method: "POST", body: JSON.stringify(body) });
       if (result.error) return { content: [{ type: "text" as const, text: `Failed: ${result.error}` }], isError: true };
       return { content: [{ type: "text" as const, text: JSON.stringify({
         subscribed: true,
         verified: false,
+        prefs: result.prefs ?? null,
         note: result.email_enabled
           ? "Check your inbox for a confirmation link. Notifications start only after you confirm. Your email is never shown to anyone."
           : "Saved. Email delivery is not configured on the server yet, so no confirmation was sent; nothing will send until an operator enables it.",
