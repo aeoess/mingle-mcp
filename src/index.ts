@@ -12,6 +12,7 @@ import { sign, canonicalize } from "agent-passport-system";
 import { createHash } from "node:crypto";
 import { loadIdentity, loadPreferences, cacheCard, clearCachedCard, classifyMatches, recordSurfaced } from "./identity.js";
 import { buildCard, cardContentHash, sealCard, explainVisibility, trackV3Card, listV3Cards, getLastCheck, setLastCheck, getBackgroundChecks, backgroundChecksAllowed, setBackgroundChecks, type BuildCardArgs } from "./v3.js";
+import { sanitize } from "./sanitize.js";
 
 const SKILL_VERSION = "mingle-composer-v1";
 
@@ -22,22 +23,6 @@ const identity = loadIdentity();
 const prefs = loadPreferences();
 const keys = { publicKey: identity.publicKey, privateKey: identity.privateKey };
 let agentId = identity.principalId;
-
-// Sanitize content from other agents before feeding into LLM context
-function sanitize(text: string | undefined): string {
-  if (!text) return "";
-  return text
-    .replace(/\[SYSTEM[^\]]*\]/gi, "[removed]")
-    .replace(/\[INST[^\]]*\]/gi, "[removed]")
-    .replace(/SYSTEM\s*OVERRIDE/gi, "[removed]")
-    .replace(/ignore\s+(previous|all|prior)\s+(instructions|prompts)/gi, "[removed]")
-    .replace(/do\s+not\s+ask\s+(the\s+)?user/gi, "[removed]")
-    .replace(/immediately\s+execute/gi, "[removed]")
-    .replace(/respond_to_intro/g, "[tool-ref-removed]")
-    .replace(/request_intro/g, "[tool-ref-removed]")
-    .replace(/approve|decline/gi, (match) => match)
-    .slice(0, 2000);
-}
 
 // _digest side-channel: fetch network state, injected into all tool responses
 async function fetchDigest(): Promise<any> {
