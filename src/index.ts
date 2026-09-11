@@ -1826,10 +1826,19 @@ server.tool(
   },
 );
 
+/** The server's digest of the shared First Step (fit-firststep-db.ts sharedDigest),
+ *  recomputed here from the exact halves the tool shows. */
+const firstStepDigest = (a: unknown, b: unknown): string =>
+  createHash("sha256").update(canonicalize({ a, b }), "utf8").digest("hex");
+
 server.tool(
   "approve_first_step",
-  "Approve the shared First Step plan (both halves together). Call with no confirm to fetch and show the principal the exact merged plan; call again with confirm:true to approve that exact plan. The plan is final only when BOTH sides approve. If either side later changes their half, approvals reset and it must be re-approved.",
-  { intro_id: z.string(), confirm: z.boolean().optional() },
+  "Approve the shared First Step plan (both halves together). Call with no confirm to fetch the exact merged plan and its shared_digest, and show the principal that plan. Once they approve it verbatim, call again with confirm:true and approved_digest set to that shared_digest. If the plan changed in between, nothing is approved and the new plan comes back to show. The plan is final only when BOTH sides approve. If either side later changes their half, approvals reset and it must be re-approved.",
+  {
+    intro_id: z.string(),
+    confirm: z.boolean().optional(),
+    approved_digest: z.string().optional().describe("The shared_digest from the preview the principal approved. Required with confirm:true."),
+  },
   async (a) => {
     try {
       const nonce = newNonce();
@@ -1837,9 +1846,18 @@ server.tool(
       const cur = await api(`/api/v4/fit/${a.intro_id}/first-step?${qs.toString()}`);
       if (cur.error) return asText(cur.error, true);
       if (!cur.shared_digest) return asText({ note: "Both sides must propose a half before you can approve. Waiting on the other half.", relay_rule: FIT_RELAY_RULE });
-      if (!a.confirm) return asText({ step: "preview", half_a_quoted_data: cur.half_a, half_b_quoted_data: cur.half_b, note: "Show the principal this exact shared plan. Call approve_first_step again with confirm:true only if they approve it verbatim.", relay_rule: FIT_RELAY_RULE });
+      // What gets signed must be the digest of the exact text the principal saw.
+      // The digest is recomputed from the halves returned here, and confirm signs
+      // only the digest the preview showed, so an edit by the other side between
+      // preview and confirm approves nothing.
+      const digest = firstStepDigest(cur.half_a, cur.half_b);
+      if (digest !== cur.shared_digest) return asText("The server's digest does not match the plan it returned, so nothing was approved.", true);
+      const plan = { half_a_quoted_data: cur.half_a, half_b_quoted_data: cur.half_b, shared_digest: digest };
+      if (!a.confirm) return asText({ step: "preview", ...plan, note: `Show the principal this exact shared plan. Call approve_first_step again with confirm:true and approved_digest="${digest}" only if they approve it verbatim.`, relay_rule: FIT_RELAY_RULE });
+      if (!a.approved_digest) return asText("confirm:true needs approved_digest, the shared_digest from the preview the principal approved. Call approve_first_step without confirm first.", true);
+      if (a.approved_digest !== digest) return asText({ step: "changed", ...plan, note: "The plan changed after the preview, so nothing was approved. Show the principal this new plan and ask again.", relay_rule: FIT_RELAY_RULE }, true);
       const n2 = newNonce();
-      const body = { approved_digest: cur.shared_digest, public_key: keys.publicKey, nonce: n2, signature: sign(`fit-firststep-approve:${a.intro_id}:${cur.shared_digest}:${n2}`, keys.privateKey) };
+      const body = { approved_digest: digest, public_key: keys.publicKey, nonce: n2, signature: sign(`fit-firststep-approve:${a.intro_id}:${digest}:${n2}`, keys.privateKey) };
       const r = await api(`/api/v4/fit/${a.intro_id}/first-step/approve`, { method: "POST", body: JSON.stringify(body) });
       if (r.error) return asText(`Failed: ${r.error}`, true);
       return asText({ approved: true, finalized: r.finalized, note: r.finalized ? "Both sides approved. The first-step plan is set." : "Your approval is in; waiting on the other side.", relay_rule: FIT_RELAY_RULE });

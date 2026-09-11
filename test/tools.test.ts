@@ -249,9 +249,10 @@ test("exact First Step text survives preview unchanged and the approved digest m
   const shownA = preview.out.half_a_quoted_data, shownB = preview.out.half_b_quoted_data;
   assert.equal(canonicalize(shownA), canonicalize(HALF_A), "the shown text is the stored text");
   assert.equal(canonicalize(shownB), canonicalize(HALF_B));
+  assert.equal(preview.out.shared_digest, sharedDigest(shownA, shownB), "the preview names the digest of exactly the shown text");
 
   const mark = seen.length;
-  const confirmed = await callTool("approve_first_step", { intro_id: "intro-fs", confirm: true });
+  const confirmed = await callTool("approve_first_step", { intro_id: "intro-fs", confirm: true, approved_digest: preview.out.shared_digest });
   assert.equal(confirmed.isError, false, JSON.stringify(confirmed.out));
   const post = seen.slice(mark).find((s) => s.path === "/api/v4/fit/intro-fs/first-step/approve");
   assert.ok(post, "the approval reached the API");
@@ -259,6 +260,46 @@ test("exact First Step text survives preview unchanged and the approved digest m
   const identity = JSON.parse(readFileSync(join(fakeHome, ".mingle", "identity.json"), "utf-8"));
   assert.equal(verify(`fit-firststep-approve:intro-fs:${post.body.approved_digest}:${post.body.nonce}`, post.body.signature, identity.publicKey), true);
   assert.equal(confirmed.out.relay_rule, FIT_RELAY);
+});
+
+test("a plan that changed after the preview is not approved, and the new plan comes back to show", async () => {
+  firstStepRoute();
+  const preview = await callTool("approve_first_step", { intro_id: "intro-fs" });
+  // The other side re-proposes its half between the preview and the confirm.
+  const HALF_B2 = { ...HALF_B, meeting_length: "3 hours", boundaries: [] };
+  routes.set("GET /api/v4/fit/intro-fs/first-step", () => ({
+    intro_id: "intro-fs", half_a: HALF_A, half_b: HALF_B2,
+    a_approved: false, b_approved: true, finalized: false,
+    shared_digest: sharedDigest(HALF_A, HALF_B2),
+  }));
+  routes.set("POST /api/v4/fit/intro-fs/first-step/approve", () => ({ approved: true, finalized: true }));
+  const mark = seen.length;
+  const confirmed = await callTool("approve_first_step", { intro_id: "intro-fs", confirm: true, approved_digest: preview.out.shared_digest });
+  assert.equal(confirmed.isError, true, "nothing is approved");
+  assert.equal(seen.slice(mark).some((s) => s.path.endsWith("/first-step/approve")), false, "no approval is sent");
+  assert.deepEqual(confirmed.out.half_b_quoted_data, HALF_B2, "the new plan comes back so it can be shown");
+  assert.equal(confirmed.out.shared_digest, sharedDigest(HALF_A, HALF_B2));
+});
+
+test("confirm without the previewed digest approves nothing", async () => {
+  firstStepRoute();
+  const mark = seen.length;
+  const r = await callTool("approve_first_step", { intro_id: "intro-fs", confirm: true });
+  assert.equal(r.isError, true);
+  assert.match(String(r.out), /approved_digest/);
+  assert.equal(seen.slice(mark).some((s) => s.path.endsWith("/first-step/approve")), false);
+});
+
+test("a server digest that does not match the plan it returned is refused", async () => {
+  const wrong = sharedDigest(HALF_A, { ...HALF_B, purpose: "something else" });
+  routes.set("GET /api/v4/fit/intro-fs/first-step", () => ({
+    intro_id: "intro-fs", half_a: HALF_A, half_b: HALF_B,
+    a_approved: false, b_approved: false, finalized: false, shared_digest: wrong,
+  }));
+  const mark = seen.length;
+  assert.equal((await callTool("approve_first_step", { intro_id: "intro-fs" })).isError, true);
+  assert.equal((await callTool("approve_first_step", { intro_id: "intro-fs", confirm: true, approved_digest: wrong })).isError, true);
+  assert.equal(seen.slice(mark).some((s) => s.path.endsWith("/first-step/approve")), false);
 });
 
 test("list_intros keeps a note verbatim under note_quoted, with its unchanged relay rule", async () => {
