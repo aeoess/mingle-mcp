@@ -115,7 +115,7 @@ export function explainVisibility(card: Record<string, any>): Record<string, str
 interface TrackedCard { card_id: string; card_type: string; headline: string; card_hash: string; published_at: string }
 
 export function trackV3Card(entry: TrackedCard): void {
-  if (!existsSync(MINGLE_DIR)) mkdirSync(MINGLE_DIR, { recursive: true });
+  if (!existsSync(MINGLE_DIR)) mkdirSync(MINGLE_DIR, { recursive: true, mode: 0o700 });
   const list = listV3Cards();
   list.unshift(entry);
   writeFileSync(V3_CARDS_PATH, JSON.stringify(list.slice(0, 50), null, 2));
@@ -151,7 +151,7 @@ function readPulse(): PulseState {
  *  preference the user set, and writing the preference must not lose the
  *  read marker. */
 function writePulse(patch: Partial<PulseState>): PulseState {
-  if (!existsSync(MINGLE_DIR)) mkdirSync(MINGLE_DIR, { recursive: true });
+  if (!existsSync(MINGLE_DIR)) mkdirSync(MINGLE_DIR, { recursive: true, mode: 0o700 });
   const next = { ...readPulse(), ...patch };
   writeFileSync(V3_PULSE_PATH, JSON.stringify(next, null, 2));
   return next;

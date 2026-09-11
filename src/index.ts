@@ -9,7 +9,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import { sign, canonicalize } from "agent-passport-system";
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { loadIdentity, loadPreferences, cacheCard, clearCachedCard, classifyMatches, recordSurfaced } from "./identity.js";
 import { buildCard, cardContentHash, sealCard, explainVisibility, trackV3Card, listV3Cards, getLastCheck, setLastCheck, getBackgroundChecks, backgroundChecksAllowed, setBackgroundChecks, type BuildCardArgs } from "./v3.js";
 import { sanitize } from "./sanitize.js";
@@ -250,7 +250,7 @@ server.tool(
   {},
   async () => {
     try {
-      const nonce = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+      const nonce = randomUUID();
       const params = new URLSearchParams({ public_key: keys.publicKey, nonce, signature: sign(`digest:${nonce}`, keys.privateKey) });
       const d = await api(`/api/v3/digest?${params.toString()}`);
       if (d.error) return { content: [{ type: "text" as const, text: d.error }], isError: true };
@@ -804,7 +804,7 @@ server.tool(
     // is still unclicked. Read-only, signed; never returns the address.
     let notifications: { subscribed: boolean; verified: boolean } | undefined;
     try {
-      const nonce = Math.random().toString(36).slice(2);
+      const nonce = randomUUID();
       const params = new URLSearchParams({ public_key: keys.publicKey, nonce, signature: sign(`notif-status:${nonce}`, keys.privateKey) });
       const s = await api(`/api/v3/notifications/status?${params.toString()}`);
       if (!s.error) notifications = { subscribed: !!s.subscribed, verified: !!s.verified };
@@ -899,7 +899,7 @@ server.tool(
   async (args) => {
     try {
       if (args.off) {
-        const nonce = Math.random().toString(36).slice(2);
+        const nonce = randomUUID();
         const body = { subject_key: keys.publicKey, nonce, signature: sign(`unsubscribe:${nonce}`, keys.privateKey) };
         const result = await api("/api/v3/notifications/unsubscribe", { method: "POST", body: JSON.stringify(body) });
         if (result.error) return { content: [{ type: "text" as const, text: `Failed: ${result.error}` }], isError: true };
@@ -908,7 +908,7 @@ server.tool(
       if (!args.email) {
         return { content: [{ type: "text" as const, text: "Provide an email to subscribe, or off:true to unsubscribe." }], isError: true };
       }
-      const nonce = Math.random().toString(36).slice(2);
+      const nonce = randomUUID();
       const body: Record<string, any> = {
         subject_key: keys.publicKey, email: args.email, nonce,
         signature: sign(`${args.email}:${nonce}`, keys.privateKey),
@@ -945,7 +945,7 @@ server.tool(
 const INTRO_PURPOSES = ["collaborate", "team_up", "work", "advise", "cofound", "meet"] as const;
 
 // Small local helpers for this section (keep the four tools readable).
-const newNonce = (): string => Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+const newNonce = (): string => randomUUID();
 const asText = (obj: unknown, isError = false) => ({
   content: [{ type: "text" as const, text: typeof obj === "string" ? obj : JSON.stringify(obj, null, 2) }],
   ...(isError ? { isError: true } : {}),

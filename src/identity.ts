@@ -4,7 +4,7 @@
 // ══════════════════════════════════════════════════════════════
 
 import { generateKeyPair } from "agent-passport-system";
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from "fs";
+import { readFileSync, writeFileSync, mkdirSync, existsSync, statSync, chmodSync } from "fs";
 import { homedir } from "os";
 import { join } from "path";
 
@@ -20,10 +20,25 @@ const IDENTITY_PATH = join(MINGLE_DIR, "identity.json");
 const LAST_CARD_PATH = join(MINGLE_DIR, "last-card.json");
 const PREFS_PATH = join(MINGLE_DIR, "preferences.json");
 
+// The directory holds the private key, so it is owner-only, and so is the key file.
+const DIR_MODE = 0o700;
+const KEY_FILE_MODE = 0o600;
+
+/** chmod a path down to `target` when it grants anything beyond it. A mode
+ *  given to mkdir or writeFile applies only when the path is created, so this
+ *  is what repairs an install an older version wrote at the default umask. A
+ *  mode that is already as narrow or narrower is left alone. */
+function tighten(path: string, target: number): void {
+  try {
+    if ((statSync(path).mode & 0o777 & ~target) !== 0) chmodSync(path, target);
+  } catch { /* best effort: a filesystem without POSIX modes keeps working */ }
+}
+
 function ensureDir(): void {
   if (!existsSync(MINGLE_DIR)) {
-    mkdirSync(MINGLE_DIR, { recursive: true });
+    mkdirSync(MINGLE_DIR, { recursive: true, mode: DIR_MODE });
   }
+  tighten(MINGLE_DIR, DIR_MODE);
 }
 
 /**
@@ -34,6 +49,7 @@ export function loadIdentity(): MingleIdentity {
   ensureDir();
 
   if (existsSync(IDENTITY_PATH)) {
+    tighten(IDENTITY_PATH, KEY_FILE_MODE);
     const raw = readFileSync(IDENTITY_PATH, "utf-8");
     const identity = JSON.parse(raw) as MingleIdentity;
     // Derive agentId from publicKey for consistency
@@ -50,7 +66,8 @@ export function loadIdentity(): MingleIdentity {
     registeredAt: new Date().toISOString(),
   };
 
-  writeFileSync(IDENTITY_PATH, JSON.stringify(identity, null, 2));
+  writeFileSync(IDENTITY_PATH, JSON.stringify(identity, null, 2), { mode: KEY_FILE_MODE });
+  tighten(IDENTITY_PATH, KEY_FILE_MODE);
   return identity;
 }
 

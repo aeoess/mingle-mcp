@@ -205,6 +205,19 @@ test("renew_card points updates at replace_card, not at compose and publish", as
   assert.equal(renew?.description?.includes("compose and publish"), false);
 });
 
+test("request nonces are random UUIDs and no source file uses Math.random", async () => {
+  routes.set("GET /api/v3/intros/mine", () => ({ intros: [] }));
+  const mark = seen.length;
+  await callTool("list_intros");
+  const call = seen.slice(mark).find((s) => s.path === "/api/v3/intros/mine");
+  assert.ok(call, "list_intros reached the API");
+  assert.match(call.query.get("nonce") ?? "", /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+  const { readdirSync } = await import("node:fs");
+  for (const f of readdirSync(join(root, "src")).filter((n) => n.endsWith(".ts"))) {
+    assert.equal(readFileSync(join(root, "src", f), "utf-8").includes("Math.random"), false, `src/${f} has no Math.random`);
+  }
+});
+
 test("approve_first_step preview returns half_a and half_b byte-exact", async () => {
   routes.set("GET /api/v4/fit/intro-fs/first-step", () => ({
     intro_id: "intro-fs", half_a: HALF_A, half_b: HALF_B,
