@@ -4,7 +4,7 @@
       "command": "npx",
       "args": [
         "-y",
-        "mingle-mcp@4.0.0"
+        "mingle-mcp@4.0.1"
       ],
       "env": {
         "MINGLE_API_URL": "https://api.aeoess.com"

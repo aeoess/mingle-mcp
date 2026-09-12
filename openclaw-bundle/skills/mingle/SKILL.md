@@ -43,7 +43,7 @@ Mingle looks for a reason the two of you might want to talk. If there is one, bo
 
 Your agent knows you. Their agent knows them. Let the agents figure out when you should meet.
 
-No feed. No profile browsing. No cold messages.
+No feed. No profile browsing. No contact details until both sides choose to share.
 
 Open source: https://github.com/aeoess/mingle-mcp
 
@@ -56,7 +56,7 @@ Open source: https://github.com/aeoess/mingle-mcp
 | `mingle_inbox` | What is waiting: introductions asked of them, ones they asked for, and what they can do next on each. | They ask about Mingle, or inside the Rule 1 gate at session start |
 | `request_intro` | Ask one person for an introduction, with a note in your person's own words. | They name someone from `find_people` |
 | `respond_intro` | Answer an introduction asked of your person: interested, not now, or not now and block. | An introduction is waiting for them |
-| `continue_connection` | Move a live introduction forward: share a contact line, take an unreleased one back, or agree a plan for the first conversation. | They are ready to exchange contact or plan |
+| `continue_connection` | Share a contact line, or take back one that has not been released. Contact is released only when both sides have shared. | They are ready to exchange contact |
 | `manage_intent` | Step back: withdraw a request, step out of an introduction, block a pair, take a card down. | They want out of something |
 | `mingle_settings` | Their own settings: where Mingle may email them, and whether their agent may check in the background. | They ask, or Rule 1 needs an answer |
 
@@ -98,10 +98,11 @@ checks" -> call `mingle_settings` with `action: 'background_checks'` and
 `enabled: false`, confirm it with the digest, and say it is off. It stays off
 until they say otherwise.
 
-**What a check sends.** The check sends the user's Mingle public key to
-`api.aeoess.com` and nothing else: no message content, no conversation, no
-telemetry. It reads back what is waiting on the user's own introductions. It
-publishes nothing, requests nothing and discloses nothing to anyone else.
+**What a check sends.** The check sends only the Mingle request and
+authentication data needed to read what is waiting. It sends no conversation
+content, message text, or unrelated context. It reads back what is waiting on
+the user's own introductions. It publishes nothing, requests nothing and
+discloses nothing to anyone else.
 
 **Running it.** With the setting on and a live card, call `mingle_inbox`. It
 reports the setting back in `background_checks` and it advances no read marker,
@@ -168,9 +169,10 @@ NEVER publish a card without the user's explicit approval. Instead:
 
    Publish this? You can edit anything."
    ```
-3. **Wait for approval.** They say yes, edit, or skip.
-4. **Only then** call `publish_intent` with `confirm: true` and the `approved_digest` from
-   the preview.
+3. **Wait for approval of the local draft.** They say yes, edit, or skip.
+4. **Get Mingle's canonical preview.** Call `publish_intent` without `confirm`.
+5. **Show that exact preview.** If they approve it verbatim, call again with `confirm: true`
+   and its `approved_digest`.
 
 ### Rule 4: Sanitize Before Showing Draft
 
@@ -247,8 +249,11 @@ Browsing is the on-ramp. Publishing is the conversion. Never pressure.
 **Asking.** When the user wants to connect with someone:
 1. Draft the note. It is the only prose the other person reads, it is signed exactly as your
    person approved it, and Mingle never rewrites it. A note may not contain a link.
-2. Show it to them, then call `request_intro` with `confirm: true`.
-3. Say: "Asked. They will see it next time they open their assistant. Nothing else happens
+2. Show the draft note to them. Once they approve it, call `request_intro` without `confirm`
+   to get Mingle's canonical preview.
+3. Show that exact preview. If they approve it verbatim, call again with `confirm: true` and
+   the `approved_digest` it returned.
+4. Say: "Asked. They will see it next time they open their assistant. Nothing else happens
    until they answer."
 
 **Answering.** When an introduction is waiting for your person:
@@ -343,9 +348,9 @@ contact, is the whole path.
 
 One command:
 ```
-npx mingle-mcp-setup@4.0.0
+npx mingle-mcp-setup@4.0.1
 ```
-`npx mingle-mcp@4.0.0 setup` does the same thing. Either auto-installs and configures
+`npx mingle-mcp@4.0.1 setup` does the same thing. Either auto-installs and configures
 Claude Desktop and Cursor. Restart your AI client.
 
 For manual config:
@@ -404,10 +409,11 @@ in, and what you can do next on each, and it changes nothing by reading.
 
 **Network calls:** Only when a Mingle tool runs. One can run without you asking in that
 moment, and it is opt-in: the session-start check runs only if you turned on
-`background_checks`. It sends your Mingle public key to `api.aeoess.com` and nothing else.
-`background_checks` is absent until you answer, absent behaves as off, it is stored at
+`background_checks`. The check sends only the Mingle request and authentication data needed
+to read what is waiting. It sends no conversation content, message text, or unrelated
+context. `background_checks` is absent until you answer, absent behaves as off, it is stored at
 `~/.mingle/v3-pulse.json` where you can read or delete it, and "stop checking Mingle" turns
-it off for good. Nothing runs when Mingle is not connected. No telemetry.
+it off for good. Nothing runs when Mingle is not connected.
 
 **Email:** Optional, for notifications and recovery only. Stored server-side, confirmed by a
 link you click, never shown on any card, never used as identity, removable anytime with

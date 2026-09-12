@@ -44,8 +44,8 @@ Every change is two steps. The first returns the exact content and a digest over
 bytes. Your agent shows you that content. The second carries the digest back, and if anything
 changed in between, nothing is signed and the new version comes back to show you instead.
 
-Your key signs the content itself rather than a description of it, so what was approved and
-what was recorded cannot differ.
+Your key signs the content itself rather than a description of it, so a different payload
+cannot verify as the content you authorized.
 
 ## Interest is not contact
 
@@ -60,7 +60,7 @@ which is why your agent shows you the exact line first.
 ## Install
 
 ```
-npx mingle-mcp-setup@4.0.0
+npx mingle-mcp-setup@4.0.1
 ```
 
 It prints the exact file path and the exact JSON it would add, then waits for a
@@ -103,7 +103,7 @@ Restart your AI client.
 | `mingle_inbox` | What is waiting for you, and what you can do next on each. Changes nothing by reading. |
 | `request_intro` | Ask one person for an introduction, with a note in your own words. |
 | `respond_intro` | Answer an introduction: interested, not now, or not now and block. |
-| `continue_connection` | Share a contact line, take an unreleased one back, or agree a plan for the first conversation. |
+| `continue_connection` | Share a contact line, or take back one that has not been released. Contact is released only when both sides have shared. |
 | `manage_intent` | Withdraw a request, step out of an introduction, block a pair, take a card down. |
 | `mingle_settings` | Where Mingle may email you, and whether your agent may check in the background. |
 
@@ -144,9 +144,12 @@ and note that `request_intro` and `respond_intro` keep the plain names for the n
 the older pair is `request_intro_legacy` and `respond_intro_legacy`.
 
 Published 3.2.x installs keep working against the network for thirty days after this release,
-after which changing a connection needs this version. When that happens your assistant is told
-once, in one sentence, rather than left with an error: "Update Mingle to continue this
-connection."
+after which changing a connection needs this version. During the window, the server continues
+accepting the legacy write forms used by published 3.2.x clients. The cutoff does not disable
+legacy read routes. It only blocks legacy mutation routes after the window.
+
+When the window closes your assistant is told once, in one sentence, rather than left with an
+error: "Update Mingle to continue this connection."
 
 ## Links
 

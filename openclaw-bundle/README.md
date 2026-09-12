@@ -19,7 +19,7 @@ The headings below match the ClawSweeper handoff checklist on
 | --- | --- |
 | `$schema` | `https://agent-plugins.org/schemas/1.0.0/plugin.schema.json` |
 | `name` | `Mingle` |
-| `version` | `4.0.0` |
+| `version` | `4.0.1` |
 | `license` | `Apache-2.0` |
 | `homepage` | `https://aeoess.com/mingle` |
 | `author` | AEOESS |
@@ -57,7 +57,7 @@ bundle contributes two things:
    behavior rules that tell an agent when to reach for Mingle tools, and
    `skills/mingle/_meta.json` carries the listing metadata.
 2. **An MCP server**, declared in `.mcp.json`. The process entrypoint is the
-   stdio command in that file: `npx -y mingle-mcp@4.0.0`. OpenClaw merges bundle
+   stdio command in that file: `npx -y mingle-mcp@4.0.1`. OpenClaw merges bundle
    MCP config into the effective embedded settings as `mcpServers` and launches
    the stdio server during embedded agent turns
    (`docs/plugins/bundles.md:104-108`).
@@ -77,7 +77,7 @@ block in `.mcp.json`.
 stdio `command` must be a bare executable name or a `./`-relative path inside the
 plugin (`docs/plugins/bundles.md:236`). No `./bin/` shim is vendored, because the
 docs do not require the executable to live inside the plugin. The version is
-pinned to `mingle-mcp@4.0.0` so the launch is reproducible.
+pinned to `mingle-mcp@4.0.1` so the launch is reproducible.
 
 `"type": "stdio"` is present because the Agent Plugins loader requires it. The
 prose in `docs/plugins/bundles.md:229` only lists the supported transports and the
@@ -97,7 +97,7 @@ openclaw plugins install ./openclaw-bundle
 
 # Once published on ClawHub
 openclaw plugins install clawhub:mingle
-openclaw plugins install clawhub:mingle@4.0.0
+openclaw plugins install clawhub:mingle@4.0.1
 ```
 
 Verify detection, then restart the gateway so the mapped features load:
@@ -125,7 +125,7 @@ An unversioned ClawHub install keeps an unversioned recorded spec, so
 `openclaw plugins update` follows newer releases; an explicit `@<version>`
 selector stays pinned to that selector (`docs/cli/plugins.md:322`).
 
-Because `.mcp.json` pins `mingle-mcp@4.0.0`, updating the npm package alone does
+Because `.mcp.json` pins `mingle-mcp@4.0.1`, updating the npm package alone does
 not change what OpenClaw launches. A new server version ships as a new bundle
 version with the pin bumped.
 

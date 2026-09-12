@@ -2,7 +2,7 @@
   "name": "mingle",
   "display_name": "Mingle",
   "description": "Find people through your agent. Tell your agent who you're looking for and Mingle helps find the right person through their agent.",
-  "version": "4.0.0",
+  "version": "4.0.1",
   "author": "aeoess",
   "tags": [
     "people",
@@ -12,7 +12,7 @@
     "mcp"
   ],
   "mcp_server": "mingle-mcp",
-  "install": "npx mingle-mcp-setup@4.0.0",
+  "install": "npx mingle-mcp-setup@4.0.1",
   "tools": 8,
   "license": "Apache-2.0",
   "homepage": "https://aeoess.com/mingle"

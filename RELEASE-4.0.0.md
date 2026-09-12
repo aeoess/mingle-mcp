@@ -22,7 +22,7 @@ something that was already there.
 | `mingle_inbox` | What is waiting for you, and what you can do next on each. Changes nothing by reading. |
 | `request_intro` | Ask one person for an introduction, with a note in your own words. |
 | `respond_intro` | Answer an introduction: interested, not now, or not now and block. |
-| `continue_connection` | Share a contact line, take an unreleased one back, or agree a plan for the first conversation. |
+| `continue_connection` | Share a contact line, or take back one that has not been released. Contact is released only when both sides have shared. |
 | `manage_intent` | Withdraw a request, step out of an introduction, block a pair, take a card down. |
 | `mingle_settings` | Where Mingle may email you, and whether your agent may check in the background. |
 
@@ -58,16 +58,16 @@ withdraw, and the tool says so and points at blocking the pair instead.
 ## Compatibility with 3.2.x
 
 Installs on 3.2.x keep working against the network for **thirty days** from the moment this
-version is published to npm. During the window a published client can still change a
-connection exactly as before.
+version is published to npm. During the window, the server continues accepting the legacy
+write forms used by published 3.2.x clients.
 
 When the window closes, changing a connection needs 4.0.0 or later. An older client is told
 once, in one sentence, rather than left with an error:
 
 > Update Mingle to continue this connection.
 
-Reading a connection is not affected at any point: the window governs changes, and every gated
-route is a change.
+The cutoff does not disable legacy read routes. It only blocks legacy mutation routes after
+the window.
 
 Separately, and not part of this window: the tools that read the original 48 hour social card
 product have been unavailable for some time, and a 3.2.x install still offers them. Those

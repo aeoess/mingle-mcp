@@ -443,7 +443,7 @@ export function registerCanonicalTools(server, ctx) {
         });
     });
     // ── 6. continue_connection ──────────────────────────────────────────────
-    server.tool("continue_connection", "Move a live introduction forward. 'share_contact' releases one contact line, and the other person receives it only once they have shared theirs too. 'withdraw_contact' takes back a contact line that has not been released yet. 'propose_plan' and 'approve_plan' agree a short plan for the first conversation. Every one of these is two steps and your person approves the exact content first. A contact line that has already been released cannot be taken back.", {
+    server.tool("continue_connection", "Move a live introduction forward. 'share_contact' releases one contact line, and the other person receives it only once they have shared theirs too. 'withdraw_contact' takes back a contact line that has not been released yet. Both are two steps and your person approves the exact content first. A contact line that has already been released cannot be taken back.", {
         intro_id: z.string(),
         action: z.enum(["share_contact", "withdraw_contact", "propose_plan", "approve_plan"]),
         contact: z.string().optional().describe("For share_contact: the one line the other person will receive."),
