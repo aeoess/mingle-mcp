@@ -300,9 +300,16 @@ export function registerCanonicalTools(server: any, ctx: ToolContext): void {
     },
     async (a: any) => {
       try {
+        // `intents` is a LIST and that is the field the route reads. Sending `intent`
+        // singular was accepted and ignored, so the purpose filter quietly did nothing and
+        // a search for cofounders answered with everybody.
         const r = await ctx.api("/api/v3/cards/search", {
           method: "POST",
-          body: JSON.stringify({ query: a.query ?? "", intent: a.purpose, limit: a.limit ?? 10 }),
+          body: JSON.stringify({
+            ...(a.query ? { query: a.query } : {}),
+            ...(a.purpose ? { intents: [a.purpose] } : {}),
+            limit: a.limit ?? 10,
+          }),
         });
         if (r.error) return ctx.asText({ refused: true, error: r.error }, true);
         return ctx.asText({
