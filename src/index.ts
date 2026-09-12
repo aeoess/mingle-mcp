@@ -1947,6 +1947,7 @@ registeringCanonical = true;
 registerCanonicalTools(server, {
   api, apiRaw, keys, agentId, asText,
   legacyNonce: newNonce,
+  skillVersion: SKILL_VERSION,
   sign,
 });
 registeringCanonical = false;

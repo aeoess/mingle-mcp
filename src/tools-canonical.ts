@@ -38,6 +38,8 @@ export interface ToolContext {
   asText: (obj: unknown, isError?: boolean) => any;
   /** The legacy nonce for the old preimages, which is not a canonical write nonce. */
   legacyNonce: () => string;
+  /** The composer version stamped into every card, from the one place that owns it. */
+  skillVersion: string;
   sign: (payload: string, privateKey: string) => string;
 }
 
@@ -166,6 +168,25 @@ const CONFIRM = {
 
 const PURPOSES = ["cofound", "team_up", "collaborate", "meet", "advise", "work"] as const;
 
+/** The four states nothing further happens on, as the server defines them at
+ *  connection-state.ts:268. Listed rather than inferred, because "the pending list is
+ *  empty" is a different question and answers `false` for a live connection. */
+const TERMINAL_STATES = new Set(["declined", "withdrawn", "blocked", "expired"]);
+
+/** The signed owner-side read, in one place. GET /api/v3/intros/mine is signed over
+ *  `intro-mine:${nonce}` and answers { count, intros }, which is the contract 3.2.x
+ *  already reads, so two call sites reading it two ways would be two bugs waiting. */
+async function mineRows(ctx: ToolContext): Promise<any[]> {
+  const nonce = ctx.legacyNonce();
+  const qs = new URLSearchParams({
+    public_key: ctx.keys.publicKey, nonce,
+    signature: ctx.sign(`intro-mine:${nonce}`, ctx.keys.privateKey),
+  });
+  const r = await ctx.api(`/api/v3/intros/mine?${qs.toString()}`);
+  if (r.error) throw new canon.CanonicalError("read_refused", r.error);
+  return (r.intros ?? []) as any[];
+}
+
 /** Trim and refuse rather than silently repair, which is the rule for every field a
  *  principal approves. An empty result is a refusal, never a dropped item. */
 function trimmed(value: string, field: string): string {
@@ -198,52 +219,70 @@ export function registerCanonicalTools(server: any, ctx: ToolContext): void {
     },
     async (a: any) => {
       try {
-        if (a.action === "renew" || a.action === "replace") {
-          if (!a.card_id) return ctx.asText({ refused: true, error: `action:'${a.action}' needs card_id.` }, true);
+        // RENEW AND REPLACE POST A WHOLE SEALED CARD, not a verb signature. The routes at
+        // v3-routes.ts:169 and :211 validate the card, verify its own signature and approval
+        // hash, and for renew additionally require content identical to the old one except
+        // for the timestamps. There is no nonce and no verb preimage on either.
+        if (a.action === "renew") {
+          if (!a.card_id) return ctx.asText({ refused: true, error: "action:'renew' needs card_id." }, true);
+          const fetched = await ctx.api(`/api/v3/cards/${encodeURIComponent(a.card_id)}`);
+          if (fetched.error || !fetched.card) return ctx.asText({ refused: true, error: `no card ${a.card_id}` }, true);
+          if (fetched.card.subject_key !== ctx.keys.publicKey) {
+            return ctx.asText({ refused: true, error: "that card belongs to someone else" }, true);
+          }
+          if (fetched.revocation_status !== "active") {
+            return ctx.asText({ refused: true, error: `only an active card can be renewed, and this one is ${fetched.revocation_status}` }, true);
+          }
           if (!a.confirm) {
             return ctx.asText({
-              step: "preview", action: a.action, card_id: a.card_id,
-              review: a.action === "renew"
-                ? "This renews the card for another 21 days. Nothing in it changes."
-                : "This publishes a new version and takes the old card down in one step.",
-              note: `Call again with confirm:true once your person approves.`,
+              step: "preview", action: "renew", card_id: a.card_id,
+              headline: fetched.card.headline ?? "",
+              review: "This renews the card for another 21 days. Not one word of it changes, so there is nothing new to approve in it.",
+              note: "Call again with confirm:true once your person approves.",
             });
           }
-          const nonce = ctx.legacyNonce();
-          const verb = a.action === "renew" ? "renew" : "replace";
-          const r = await ctx.api(`/api/v3/cards/${a.card_id}/${verb}`, {
-            method: "POST",
-            body: JSON.stringify({
-              public_key: ctx.keys.publicKey, nonce,
-              signature: ctx.sign(`${verb}:${a.card_id}:${nonce}`, ctx.keys.privateKey),
-            }),
+          const r = await ctx.api(`/api/v3/cards/${encodeURIComponent(a.card_id)}/renew`, {
+            method: "POST", body: JSON.stringify({ card: await resealForRenew(ctx, fetched.card) }),
           });
           if (r.error) return ctx.asText({ refused: true, error: r.error }, true);
-          return ctx.asText({ [a.action === "renew" ? "renewed" : "replaced"]: true, ...r });
+          return ctx.asText({ renewed: true, card_id: r.new_card_id, superseded: r.superseded, expires_at: r.expires_at });
         }
-        // publish
-        if (!a.headline) return ctx.asText({ refused: true, error: "publish needs a headline in your person's own words." }, true);
+        // PUBLISH AND REPLACE ARE ONE PATH, because replace IS a publish that also supersedes.
+        // New content means a new approval, so the same preview, the same digest check and the
+        // same seal apply, and only the route differs.
+        const replacing = a.action === "replace";
+        if (replacing && !a.card_id) return ctx.asText({ refused: true, error: "action:'replace' needs card_id, the card being replaced." }, true);
+        if (!a.headline) {
+          return ctx.asText({ refused: true, error: `${replacing ? "replace" : "publish"} needs a headline in your person's own words.` }, true);
+        }
         const card = {
           headline: trimmed(a.headline, "headline"),
           seeking: (a.seeking ?? []).map((s: string) => trimmed(s, "seeking")),
           offering: (a.offering ?? []).map((s: string) => trimmed(s, "offering")),
           intents: a.purposes ?? [],
         };
+        const digest = canon.sha256Hex(canon.jcs(card));
         if (!a.confirm) {
-          const digest = canon.sha256Hex(canon.jcs(card));
           return ctx.asText({
-            step: "preview", action: "publish", approve_this_exactly: card, approved_digest: digest,
-            review: "This is what other people's agents will be able to see and match on. It is in your person's own words and Mingle does not rewrite it.",
+            step: "preview", action: replacing ? "replace" : "publish", approve_this_exactly: card, approved_digest: digest,
+            ...(replacing ? { replaces_card_id: a.card_id } : {}),
+            review: replacing
+              ? "This publishes this exact new version and takes the old card down in one step. It is what other people's agents will see and match on, in your person's own words."
+              : "This is what other people's agents will be able to see and match on. It is in your person's own words and Mingle does not rewrite it.",
             note: `Call again with confirm:true and approved_digest="${digest}" once your person approves this exact text.`,
           });
         }
-        const digest = canon.sha256Hex(canon.jcs(card));
         if (a.approved_digest !== digest) {
           return ctx.asText({ step: "changed", approve_this_exactly: card, approved_digest: digest, note: "The card changed after the preview, so nothing was published." }, true);
         }
-        const r = await ctx.api("/api/v3/cards", { method: "POST", body: JSON.stringify({ card: await buildSealedCard(ctx, card) }) });
+        const sealed = await buildSealedCard(ctx, card);
+        const r = replacing
+          ? await ctx.api(`/api/v3/cards/${encodeURIComponent(a.card_id)}/replace`, { method: "POST", body: JSON.stringify({ card: sealed }) })
+          : await ctx.api("/api/v3/cards", { method: "POST", body: JSON.stringify({ card: sealed }) });
         if (r.error) return ctx.asText({ refused: true, error: r.error }, true);
-        return ctx.asText({ published: true, card_id: r.card_id, expires_at: r.expires_at });
+        return replacing
+          ? ctx.asText({ replaced: true, card_id: r.new_card_id, superseded: r.superseded, expires_at: r.expires_at })
+          : ctx.asText({ published: true, card_id: r.card_id, expires_at: r.expires_at });
       } catch (e: any) {
         return ctx.asText({ refused: true, code: e.code ?? "error", error: e.message }, true);
       }
@@ -283,21 +322,26 @@ export function registerCanonicalTools(server: any, ctx: ToolContext): void {
   // facts and never stored, so the inbox reports what the SERVER says is available rather
   // than re-deriving it here. Two clients that both guessed would eventually disagree with
   // each other and with the guards.
+  //
+  // THE SHAPE IS THE SERVER'S, NOT THIS CLIENT'S. GET /api/v3/intros/mine answers
+  // { count, intros: [...] } with `direction` on each row, signed over `intro-mine:${nonce}`.
+  // Those are the published contract that 3.2.x already reads, so this reads exactly them
+  // and the presentation happens here.
   server.tool(
     "mingle_inbox",
     "What is waiting for your person on Mingle: introductions asked of them, introductions they asked for, and what they can do next on each. Read this when your person asks about Mingle, or when they have turned on background checking and a session is starting. It never acts on anything by itself and it never marks anything as read.",
     { include_finished: z.boolean().optional().describe("Also list connections that are already made or closed.") },
     async (a: any) => {
       try {
-        const nonce = ctx.legacyNonce();
-        const qs = new URLSearchParams({
-          public_key: ctx.keys.publicKey, nonce,
-          signature: ctx.sign(`intros-mine:${nonce}`, ctx.keys.privateKey),
-        });
-        const r = await ctx.api(`/api/v3/intros/mine?${qs.toString()}`);
-        if (r.error) return ctx.asText({ refused: true, error: r.error }, true);
-        const rows: any[] = [...(r.incoming ?? []), ...(r.outgoing ?? [])];
-        const live = a.include_finished ? rows : rows.filter(x => (x.pending_actions ?? []).length > 0);
+        const rows = await mineRows(ctx);
+        // WHAT "FINISHED" MEANS HERE. `complete` is the server's own finished predicate and
+        // a terminal state is one nothing further happens on. It is deliberately NOT "the
+        // pending list is empty": a connected introduction still offers a first step and a
+        // block, so filtering on an empty list would hide every connection this tool just
+        // helped make.
+        const live = a.include_finished
+          ? rows
+          : rows.filter(x => x.complete !== true && !TERMINAL_STATES.has(String(x.state ?? "")));
         // THE SESSION START GATE IS REPORTED, NEVER DECIDED HERE. Rule 1 of the SKILL is the
         // only session-start rule: nothing contacts Mingle at session start unless the person
         // has turned background checking on, and absent means off. This tool cannot tell a
@@ -308,8 +352,12 @@ export function registerCanonicalTools(server: any, ctx: ToolContext): void {
         const background = v3.getBackgroundChecks() ?? "off";
         return ctx.asText({
           waiting_on_your_person: live.map(x => ({
-            intro_id: x.intro_id ?? x.id,
-            direction: (r.incoming ?? []).includes(x) ? "asked_of_them" : "they_asked",
+            intro_id: x.id,
+            // The server says which way the introduction points, from the two keys on the
+            // row. Guessing it from a list membership would be this client's opinion.
+            direction: x.direction === "incoming" ? "asked_of_them" : "they_asked",
+            // The derived state. `status` is the compatibility column and is the fallback
+            // only for a row whose facts the server could not see, where it is all there is.
             state: x.state ?? x.status,
             expires_at: x.expires_at ?? null,
             // Straight from the SERVER's own owner-side projection, which is derived from the
@@ -430,7 +478,10 @@ export function registerCanonicalTools(server: any, ctx: ToolContext): void {
             operation: "share_contact", resourceId: a.intro_id,
             payload: { private_value_commitment: commitment },
             privateValue: { value, salt },
-            path: `/api/v3/intros/${encodeURIComponent(a.intro_id)}/complete`,
+            // The canonical share is its own route. POST /:id/complete is the LEGACY lane,
+            // which is requester only, unbound and takes the contact in the clear, so posting
+            // an envelope there would have been refused for want of a `contact` field.
+            path: "/api/v3/intros/share-contact",
             confirm: a.confirm, approvedDigest: a.approved_digest,
             reviewText: "This releases this exact contact line. The other person receives it only after they have shared theirs. Once released, Mingle cannot take it back. The line itself is never written into a receipt: only a commitment to it is.",
             done: out => ({
@@ -530,10 +581,15 @@ export function registerCanonicalTools(server: any, ctx: ToolContext): void {
               note: "Call again with confirm:true once your person approves.",
             });
           }
-          const nonce = ctx.legacyNonce();
-          const r = await ctx.api(`/api/v3/cards/${a.card_id}/withdraw`, {
+          // The card verb preimage is `${verb}:${cardId}` and carries NO nonce, which is the
+          // contract at v3-routes.ts:330. The verb is idempotent and its effect is a single
+          // status column, so there is nothing a replay could do twice.
+          const r = await ctx.api(`/api/v3/cards/${encodeURIComponent(a.card_id)}/withdraw`, {
             method: "POST",
-            body: JSON.stringify({ public_key: ctx.keys.publicKey, nonce, signature: ctx.sign(`withdraw:${a.card_id}:${nonce}`, ctx.keys.privateKey) }),
+            body: JSON.stringify({
+              public_key: ctx.keys.publicKey,
+              signature: ctx.sign(`withdraw:${a.card_id}`, ctx.keys.privateKey),
+            }),
           });
           if (r.error) return ctx.asText({ refused: true, error: r.error }, true);
           return ctx.asText({ taken_down: true, ...r });
@@ -598,12 +654,16 @@ export function registerCanonicalTools(server: any, ctx: ToolContext): void {
           const state = bg.setBackgroundChecks(a.enabled);
           return ctx.asText({ background_checks: a.enabled ? "on" : "off", state });
         }
+        // The notification surface names the key `subject_key` and verifies under it. It is
+        // not `public_key`: that is the name the intro and card surfaces use, and sending it
+        // here reaches a route that reads subject_key and refuses for want of a signature.
         if (a.action === "stop_email") {
           const nonce = ctx.legacyNonce();
           const r = await ctx.api("/api/v3/notifications/unsubscribe", {
             method: "POST",
-            body: JSON.stringify({ public_key: ctx.keys.publicKey, nonce, signature: ctx.sign(`unsubscribe:${nonce}`, ctx.keys.privateKey) }),
+            body: JSON.stringify({ subject_key: ctx.keys.publicKey, nonce, signature: ctx.sign(`unsubscribe:${nonce}`, ctx.keys.privateKey) }),
           });
+          if (r.error) return ctx.asText({ refused: true, error: r.error }, true);
           return ctx.asText({ email_stopped: true, ...r });
         }
         if (!a.email) return ctx.asText({ refused: true, error: "set_email needs email." }, true);
@@ -618,7 +678,7 @@ export function registerCanonicalTools(server: any, ctx: ToolContext): void {
         const nonce = ctx.legacyNonce();
         const r = await ctx.api("/api/v3/notifications/subscribe", {
           method: "POST",
-          body: JSON.stringify({ email, public_key: ctx.keys.publicKey, nonce, signature: ctx.sign(`${email}:${nonce}`, ctx.keys.privateKey) }),
+          body: JSON.stringify({ email, subject_key: ctx.keys.publicKey, nonce, signature: ctx.sign(`${email}:${nonce}`, ctx.keys.privateKey) }),
         });
         if (r.error) return ctx.asText({ refused: true, error: r.error }, true);
         return ctx.asText({ email_set: email, confirm_note: "Mingle sent a confirmation email. Nothing is delivered until your person confirms it.", ...r });
@@ -639,16 +699,15 @@ async function blockPairAct(ctx: ToolContext, introId: string, confirm: boolean 
   // the payload carries both cards and the intro. The cards come from the server rather
   // than from the caller, because the resource id has to be the pair the server will
   // compute and a caller-supplied pair could name two other cards.
-  const nonce = ctx.legacyNonce();
-  const qs = new URLSearchParams({
-    public_key: ctx.keys.publicKey, nonce,
-    signature: ctx.sign(`intros-mine:${nonce}`, ctx.keys.privateKey),
-  });
-  const mine = await ctx.api(`/api/v3/intros/mine?${qs.toString()}`);
-  const row = [...(mine.incoming ?? []), ...(mine.outgoing ?? [])].find((x: any) => (x.intro_id ?? x.id) === introId);
+  let row: any;
+  try {
+    row = (await mineRows(ctx)).find((x: any) => x.id === introId);
+  } catch (e: any) {
+    return ctx.asText({ refused: true, code: e.code ?? "error", error: e.message }, true);
+  }
   if (!row) return ctx.asText({ refused: true, error: `no introduction ${introId} for this key` }, true);
-  const cardA = row.from_card ?? row.from_card_id;
-  const cardB = row.to_card ?? row.to_card_id;
+  const cardA = row.from_card;
+  const cardB = row.to_card;
   if (!cardA || !cardB) {
     return ctx.asText({ refused: true, error: "the server did not return both card ids for this introduction, so the pair cannot be named" }, true);
   }
@@ -663,17 +722,43 @@ async function blockPairAct(ctx: ToolContext, introId: string, confirm: boolean 
 
 /** Build and seal a v3 card from the approved content. The card surface signs a card_hash
  *  under agent-passport-system canonicalization, which is deliberately NOT the RFC 8785
- *  envelope: the two preimages are different and the server checks each with its own. */
+ *  envelope: the two preimages are different and the server checks each with its own.
+ *
+ *  BuildCardArgs IS THE CONTRACT, not an approximation of it. card_type is required and the
+ *  server refuses a card without one, `subject_key` is the field name (not subjectKey), and
+ *  seeking and offering are objects rather than strings. Typed rather than cast, so a field
+ *  that moves is a compile error instead of a runtime refusal. */
 async function buildSealedCard(ctx: ToolContext, approved: Record<string, unknown>): Promise<Record<string, unknown>> {
   const v3 = await import("./v3.js");
-  const card = v3.buildCard({
-    subjectKey: ctx.keys.publicKey,
+  // A person's own intent card is a connection card. The opportunity type is a different
+  // product shape, and the eight tool surface does not publish one.
+  const args: import("./v3.js").BuildCardArgs = {
+    card_type: "connection",
+    subject_key: ctx.keys.publicKey,
     headline: approved.headline as string,
-    seeking: (approved.seeking as string[]) ?? [],
-    offering: ((approved.offering as string[]) ?? []).map(d => ({ description: d, provenance: "principal_statement" })),
     intents: (approved.intents as string[]) ?? [],
-  } as any);
-  return v3.sealCard(card, ctx.keys.privateKey);
+    seeking: ((approved.seeking as string[]) ?? []).map(d => ({ description: d })),
+    offering: ((approved.offering as string[]) ?? []).map(d => ({ description: d })),
+    skill_version: ctx.skillVersion,
+  };
+  return v3.sealCard(v3.buildCard(args), ctx.keys.privateKey);
+}
+
+/** The same card with fresh timestamps and a fresh seal, which is what renew is.
+ *
+ *  sameContentExceptTimestamps at v3-routes.ts:183 compares everything else, so a single
+ *  edited word here is a 400 rather than a silent content change. The old signature and
+ *  approval are dropped before resealing because they cover the old timestamps. */
+async function resealForRenew(ctx: ToolContext, existing: Record<string, any>): Promise<Record<string, unknown>> {
+  const v3 = await import("./v3.js");
+  const renewed: Record<string, any> = { ...existing };
+  delete renewed.signature;
+  delete renewed.approval;
+  const now = Date.now();
+  renewed.created_at = new Date(now).toISOString();
+  renewed.expires_at = new Date(now + v3.DEFAULT_TTL_DAYS * 24 * 3600 * 1000).toISOString();
+  renewed.revocation_status = "active";
+  return v3.sealCard(renewed, ctx.keys.privateKey);
 }
 
 /** What the server says about its own write surface, read from the capability field on the
