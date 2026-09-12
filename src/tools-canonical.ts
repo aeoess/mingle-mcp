@@ -413,6 +413,11 @@ export function registerCanonicalTools(server: any, ctx: ToolContext): void {
             // durable facts and never stored. Re-deriving it here would eventually disagree
             // with the guards that actually refuse a write.
             can_do_now: (x.pending_actions ?? []).map(mapPendingAction),
+            // WHICH CARDS this introduction is on, named from your person's side. A person with
+            // more than one card cannot otherwise tell which of theirs an introduction belongs
+            // to, and the answer decides what the introduction is even about.
+            your_card: x.direction === "incoming" ? x.to_card : x.from_card,
+            their_card: x.direction === "incoming" ? x.from_card : x.to_card,
             purpose: x.purpose,
             note_written_by_the_other_side: x.note ?? null,
             counterparty_contact: x.counterparty_contact ?? null,

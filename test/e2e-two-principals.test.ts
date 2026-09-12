@@ -154,9 +154,21 @@ async function approveAndSend(p: Principal, tool: string, args: Record<string, u
  *  assertions about the RESULTS from being flaky about the clock. It gives up rather than
  *  loops forever, so a model that never loads is a failure and not a hang. */
 async function findReady(p: Principal, args: Record<string, unknown>): Promise<any> {
-  for (let i = 0; i < 60; i++) {
+  // AT MOST 12 ATTEMPTS, and only while the answer names the model.
+  //
+  // The route reports ANY exception in the query path as "semantic search unavailable: <message>"
+  // (v3-routes.ts:292), so a loop matching that prefix retried a corrupt index or a SQL error as
+  // though it were a cold model. And the search limiter is 30 per hour, so a 60 attempt loop
+  // could never reach its own limit: it tripped the rate limit first, burned the principal's
+  // whole hourly quota, and then failed with "Rate limit exceeded", a diagnosis unrelated to the
+  // fault. Both observed.
+  //
+  // So: the retry is gated on the message actually naming the model, the budget is well under
+  // the limiter, and anything else is returned immediately for the caller to assert on.
+  for (let i = 0; i < 12; i++) {
     const out = await call(p, "find_people", args);
-    if (!/semantic search unavailable/.test(String(out.error ?? ""))) return out;
+    const err = String(out.error ?? "");
+    if (!/embedding model not ready/.test(err)) return out;
     await new Promise(r => setTimeout(r, 500));
   }
   throw new Error("the embedding model never became ready, so no query search could run");
@@ -336,7 +348,56 @@ test("E2E: a released contact cannot be withdrawn, and the refusal names block_p
   assert.equal(row.state, "connected", "and the refusal changed nothing");
 });
 
-test("E2E: REPLAY, the same signed act twice is one act", skipIfNoApi, async () => {
+test("E2E: REPLAY, a byte identical signed act is answered from the store, not performed twice", skipIfNoApi, async () => {
+  // THE TEST THIS REPLACES proved something narrower than its name. canonicalAct mints a fresh
+  // nonce and issued_at on every call, so two calls are two DIFFERENT signed acts and the nonce
+  // store never sees a duplicate: the write_nonces table ended with two committed rows. What
+  // stopped a second introduction was request_id, which the second test below covers. The
+  // nonce defense was exercised by nothing: replacing its INSERT with INSERT OR IGNORE left the
+  // whole suite green.
+  //
+  // A byte identical resend can only be built below the tool, because the tool refuses to
+  // produce one. So this signs one envelope and posts those exact bytes twice.
+  const a10 = await principal("alice10");
+  const b10 = await principal("bob10");
+  const ac = await approveAndSend(a10, "publish_intent", { action: "publish", headline: "Byte identical probe one", purposes: ["meet"] });
+  const bc = await approveAndSend(b10, "publish_intent", { action: "publish", headline: "Byte identical probe two", purposes: ["meet"] });
+  const aKeys = JSON.parse(readFileSync(join(a10.home, ".mingle", "identity.json"), "utf8"));
+
+  const canon = await import("../src/canonical.js");
+  const { sign } = await import("agent-passport-system");
+  const payload = {
+    from_card: ac.card_id, to_card: bc.card_id, purpose: "meet",
+    note: "One envelope, posted twice, byte for byte.",
+  };
+  const built = canon.buildEnvelope({
+    operation: "request_intro", actorKey: aKeys.publicKey, resourceId: canon.newRequestId(), payload,
+  });
+  const wire = JSON.stringify({ envelope: built.envelope, signature: sign(built.envelopeBytes, aKeys.privateKey), payload });
+  const send = () => fetch(`${base}/api/v3/intros/request`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: wire,
+  });
+
+  const first = await send();
+  const firstBody: any = await first.json();
+  assert.equal(first.status, 201, JSON.stringify(firstBody));
+  assert.equal(firstBody.idempotent, false, "the first time is a real write");
+
+  const second = await send();
+  const secondBody: any = await second.json();
+  assert.equal(second.status, 200, "a byte identical resend is answered, not refused");
+  assert.equal(secondBody.idempotent, true, "and it says so, which is the nonce store answering");
+  assert.equal(secondBody.intro_id, firstBody.intro_id);
+  assert.equal(secondBody.write_ref, firstBody.write_ref, "the same act has the same identifier");
+
+  // Exactly one nonce row for that act, and exactly one introduction.
+  const rows = queryApiDb<any>("SELECT COUNT(*) AS n FROM write_nonces WHERE write_ref = ?", built.writeRef);
+  assert.equal(rows.n, 1, "one act, one nonce row");
+  const intros = queryApiDb<any>("SELECT COUNT(*) AS n FROM v3_intros WHERE from_card = ? AND to_card = ?", ac.card_id, bc.card_id);
+  assert.equal(intros.n, 1);
+});
+
+test("E2E: REQUEST ID, a retry with a fresh nonce still makes one introduction", skipIfNoApi, async () => {
   const a2 = await principal("alice2");
   const b2 = await principal("bob2");
   const ac = await approveAndSend(a2, "publish_intent", { action: "publish", headline: "Replay probe one", purposes: ["collaborate"] });
@@ -413,12 +474,24 @@ test("E2E: NOTIFICATION OUTAGE, a confirmed subscriber whose mail cannot leave s
   assert.equal(done.released, true, "the release does not depend on a notification going out");
   assert.equal(done.counterparty_contact, "a8-line@example.com");
 
-  // No mail left, and nothing pretended it did. With no transport configured, dispatch
-  // refuses at isEmailEnabled before reserving, so the log carries no row for a message
-  // nobody received. The neighbouring case, a transport that reserves and then throws, gives
-  // its reservation back and is asserted in the API repo where a mailer can be injected.
+  // WHAT THIS ASSERTION DOES AND DOES NOT PROVE, stated because it is inert as configured and a
+  // reader deserves to know. No transport is configured here, so dispatch refuses at
+  // isEmailEnabled BEFORE reserving a send, and email_log is 0 in every test in this file,
+  // including the no-subscriber one. Deleting the release of a failed reservation leaves this
+  // green. What it does hold is that nothing recorded a delivery that did not happen, and that
+  // the whole subscribe and confirm path works over HTTP, which is what the two assertions
+  // below are really about.
+  //
+  // The case where a transport reserves and then throws needs an injectable mailer, so it is
+  // asserted in the API repo, in process, at share-contact.test.ts, and not weakly here.
   assert.equal(emailLogCount(a8.publicKey), 0, "no delivery was recorded for a message that never went out");
   assert.equal(emailLogCount(b8.publicKey), 0);
+  // Both subscriptions are real and confirmed, which is the part this test alone establishes.
+  for (const who of [a8, b8]) {
+    const sub = queryApiDb<any>("SELECT email, verified FROM notifications WHERE subject_key = ?", who.publicKey);
+    assert.ok(sub, "the subscription was stored");
+    assert.equal(sub.verified, 1, "and confirming it over HTTP worked, so a real outage would have been attempted");
+  }
   // And both sides read the connection as made.
   for (const who of [a8, b8]) {
     const row = (await call(who, "mingle_inbox", { include_finished: true }))
@@ -496,14 +569,21 @@ test("E2E: PRIVACY, a contact line never appears in anything the other side read
   // Everything Bob can read, before he has shared anything.
   const bInbox = await call(b4, "mingle_inbox", { include_finished: true });
   assert.equal(JSON.stringify(bInbox).includes(secret), false, "the held line is in nothing Bob reads");
-  const bFind = await call(b4, "find_people", { query: "privacy probe" });
+  // findReady, not call, and the search must actually have worked. Against a search answering
+  // 500 for every query, `JSON.stringify({error}).includes(secret)` is trivially false, so this
+  // assertion passed while proving nothing. Observed: breaking the search left PRIVACY green.
+  const bFind = await findReady(b4, { query: "privacy probe" });
+  assert.ok(Array.isArray(bFind.people), `the search must work for its absence to mean anything: ${JSON.stringify(bFind)}`);
+  assert.ok(bFind.people.length > 0, "and it must return the probe cards it is searching for");
   assert.equal(JSON.stringify(bFind).includes(secret), false);
 
   // And everything a THIRD PARTY can read, who is party to nothing.
   const out4 = await principal("outsider4");
   await approveAndSend(out4, "publish_intent", { action: "publish", headline: "Privacy probe outsider", purposes: ["meet"] });
   assert.equal(JSON.stringify(await call(out4, "mingle_inbox", { include_finished: true })).includes(secret), false);
-  assert.equal(JSON.stringify(await call(out4, "find_people", { query: "privacy probe" })).includes(secret), false);
+  const outFind = await findReady(out4, { query: "privacy probe" });
+  assert.ok(outFind.people.length > 0, "the outsider's search works, so its absence means something");
+  assert.equal(JSON.stringify(outFind).includes(secret), false);
   // Including the unauthenticated card reads, which are the only public reads of either party.
   for (const cardId of [ac.card_id, bc.card_id]) {
     const raw = await (await fetch(`${base}/api/v3/cards/${cardId}`)).text();
@@ -532,9 +612,22 @@ test("E2E: MULTI CARD, one principal with two cards acts as the card they name",
     note: "Sent from the second card rather than the first.",
   });
   assert.equal(req.requested, true, JSON.stringify(req));
+  // THE RECORDED CARD IS THE ASSERTION. Asserting only `purpose` proved nothing: purpose is a
+  // straight echo of the argument, and the handler never checks it against the card's own
+  // intents. A mutation that recorded a DIFFERENT card of the same actor left this test green.
+  const raw: any = await (await fetch(`${base}/api/v3/intros/${req.intro_id}`)).json().catch(() => null);
+  const stored = queryApiDb<any>("SELECT from_card, to_card, purpose FROM v3_intros WHERE id = ?", req.intro_id);
+  assert.equal(stored.from_card, second.card_id, "the introduction is recorded against the card that was named");
+  assert.notEqual(stored.from_card, first.card_id, "and not against the other one");
+  assert.equal(stored.to_card, bc.card_id);
+  assert.equal(stored.purpose, "team_up");
+  void raw;
+
   const bInbox = await call(b5, "mingle_inbox", {});
   const row = bInbox.waiting_on_your_person.find((x: any) => x.intro_id === req.intro_id);
   assert.ok(row, "the counterparty sees it");
+  assert.equal(row.their_card, second.card_id, "and the counterparty is shown that same card as theirs");
+  assert.equal(row.your_card, bc.card_id, "beside their own");
   assert.equal(row.purpose, "team_up", "under the purpose the named card carries");
 });
 
@@ -561,7 +654,12 @@ test("E2E: GRANDFATHERED LEGACY CLIENT, a 3.2.x body still works beside a canoni
   });
   const body: any = await res.json();
   assert.equal(res.status, 201, `the legacy lane refused a published client: ${JSON.stringify(body)}`);
-  assert.ok(body.id, "and the old response shape is unchanged");
+  // EVERY FIELD 3.2.2 READS, not just the id. Its request_intro_v3 tool reads id, status,
+  // purpose and note, so a response missing any of them changes what that client shows.
+  assert.ok(body.id, "id");
+  assert.equal(body.status, "pending", "status");
+  assert.equal(body.purpose, "collaborate", "purpose");
+  assert.equal(body.note, "Sent the old way, with no envelope at all.", "note, byte for byte");
 
   // The counterparty sees it through the NEW surface, so the two lanes are one product.
   const bInbox = await call(b6, "mingle_inbox", {});
@@ -576,6 +674,89 @@ test("E2E: GRANDFATHERED LEGACY CLIENT, a 3.2.x body still works beside a canoni
   assert.equal(rootIndex.write_authorization.legacy_cutoff_at, null, "unstamped means open, never closed");
 });
 
+test("E2E: MIXED LANE, a legacy client and a canonical one move the same connection", skipIfNoApi, async () => {
+  // WHAT THE GRANDFATHERING TEST DOES NOT SHOW. It drives POST /api/v3/intros/request, which
+  // runs checkLegacyCreate: the cutoff only, because anti-downgrade is structurally a no-op on
+  // a create that has no resource yet. So it proves a legacy client can still START something.
+  // The two legacy routes that carry the real checkLegacyWrite, respond and complete, were
+  // never driven, and neither was a connection that two different lanes move forward together.
+  //
+  // This is the pair the thirty day window exists for: one person upgraded, one has not.
+  const { sign } = await import("agent-passport-system");
+  const a11 = await principal("alice11");   // canonical, this version
+  const b11 = await principal("bob11");     // acts as a published 3.2.2 install below
+  const ac = await approveAndSend(a11, "publish_intent", { action: "publish", headline: "Mixed lane probe, upgraded side", purposes: ["collaborate"] });
+  const bc = await approveAndSend(b11, "publish_intent", { action: "publish", headline: "Mixed lane probe, older side", purposes: ["collaborate"] });
+  const bKeys = JSON.parse(readFileSync(join(b11.home, ".mingle", "identity.json"), "utf8"));
+
+  // Alice asks canonically, with an envelope.
+  const req = await approveAndSend(a11, "request_intro", {
+    to_card_id: bc.card_id, from_card_id: ac.card_id, purpose: "collaborate",
+    note: "One of us has upgraded and one of us has not.",
+  });
+  assert.equal(req.requested, true, JSON.stringify(req));
+  const introId: string = req.intro_id;
+
+  // Bob answers the OLD way, with the 3.2.2 body and preimage, and a contact, which is what the
+  // legacy accept requires. He has signed nothing canonically, so no mode row refuses him.
+  const n1 = "legacy-" + Math.random().toString(36).slice(2);
+  const accept = await fetch(`${base}/api/v3/intros/${introId}/respond`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      action: "accept", contact: "bob11-legacy@example.com",
+      public_key: bKeys.publicKey, nonce: n1,
+      signature: sign(`intro-respond:${introId}:accept:${n1}`, bKeys.privateKey),
+    }),
+  });
+  const acceptBody: any = await accept.json();
+  assert.equal(accept.status, 200, `the legacy accept was refused: ${JSON.stringify(acceptBody)}`);
+  assert.equal(acceptBody.status, "accepted");
+
+  // Alice, on the canonical lane, sees a live introduction and shares her line with an envelope.
+  const aRow = (await call(a11, "mingle_inbox", {})).waiting_on_your_person.find((x: any) => x.intro_id === introId);
+  assert.ok(aRow, "the upgraded side sees the introduction the older side accepted");
+  const aShare = await approveAndSend(a11, "continue_connection", {
+    intro_id: introId, action: "share_contact", contact: "alice11-canonical@example.com",
+  });
+  assert.equal(aShare.shared, true, JSON.stringify(aShare));
+
+  // And the connection completes, with one side's authorization canonical and the other's legacy.
+  // Which side released last decides who learns the line from the call, so this asserts the
+  // durable outcome rather than a particular ordering.
+  const stored = queryApiDb<any>("SELECT status, from_contact, to_contact FROM v3_intros WHERE id = ?", introId);
+  assert.equal(stored.status, "accepted");
+  assert.ok(stored.from_contact, "the canonical side's line is stored");
+  assert.ok(stored.to_contact, "and the legacy side's");
+
+  const done = (await call(a11, "mingle_inbox", { include_finished: true }))
+    .waiting_on_your_person.find((x: any) => x.intro_id === introId);
+  assert.equal(done.state, "connected", "a mixed pair reaches connected");
+  assert.equal(done.counterparty_contact, "bob11-legacy@example.com",
+    "and the upgraded side receives the older side's line");
+
+  // Bob may not now downgrade a resource he has acted on canonically, and he has not, so his
+  // legacy lane still works. Alice HAS acted canonically on this intro, so her legacy write is
+  // refused with the upgrade sentence rather than the window.
+  const n2 = "legacy-" + Math.random().toString(36).slice(2);
+  const aLegacy = await fetch(`${base}/api/v3/intros/${introId}/complete`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      contact: "alice11-again@example.com",
+      public_key: JSON.parse(readFileSync(join(a11.home, ".mingle", "identity.json"), "utf8")).publicKey,
+      nonce: n2,
+      signature: sign(`intro-complete:${introId}:${n2}`,
+        JSON.parse(readFileSync(join(a11.home, ".mingle", "identity.json"), "utf8")).privateKey),
+    }),
+  });
+  const aLegacyBody: any = await aLegacy.json();
+  assert.ok(aLegacy.status === 426 || aLegacy.status === 409,
+    `a key that has signed canonically here must not be able to write legacy: ${aLegacy.status} ${JSON.stringify(aLegacyBody)}`);
+  if (aLegacy.status === 426) {
+    assert.equal(aLegacyBody.code, "client_upgrade_required");
+    assert.equal(aLegacyBody.error, "Update Mingle to continue this connection.");
+  }
+});
+
 test("E2E: FEEDBACK has no surface at this revision, and no default tool pretends otherwise", skipIfNoApi, async () => {
   // The program's flow ends with feedback recorded, and this revision cannot record any. The
   // only feedback route is POST /api/feedback/:introId, which sits behind the v2 containment
@@ -584,7 +765,11 @@ test("E2E: FEEDBACK has no surface at this revision, and no default tool pretend
   //
   // Asserted rather than skipped quietly, because the useful fact is not "feedback is missing"
   // but "the containment is what makes it missing, and it answers with its approved sentence".
-  const res = await fetch(`${base}/api/feedback/${connectedIntroId}`, {
+  // A LITERAL ID, not connectedIntroId. Coupling this to the first test meant that if the first
+  // test aborted early, this one posted to /api/feedback/ with an empty segment, which matches no
+  // route, so it failed 404 instead of 503 and blamed the containment for an unrelated failure.
+  // The containment refuses before it ever looks at the id, so any id proves it.
+  const res = await fetch(`${base}/api/feedback/intro-that-need-not-exist`, {
     method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ rating: "useful", comment: "This one worked." }),
   });
@@ -593,11 +778,14 @@ test("E2E: FEEDBACK has no surface at this revision, and no default tool pretend
   assert.equal(body.code, "v2_disabled");
   assert.equal(body.error, "This legacy Mingle interface is temporarily unavailable. Use the current Mingle tools.");
 
-  // And the root index advertises none of the contained surface, so it cannot be discovered.
+  // And the root index advertises none of the contained surface, anywhere in the body. Scanning
+  // only `endpoints` would miss a contained route surfacing under another key.
   const index: any = await (await fetch(`${base}/`)).json();
-  const advertised = JSON.stringify(index.endpoints ?? index);
-  assert.equal(advertised.includes("/api/feedback/"), false, "a contained route is not advertised");
-  assert.equal(advertised.includes("/api/trust/"), false);
+  const whole = JSON.stringify(index);
+  for (const contained of ["/api/feedback/", "/api/trust/", "POST /api/cards", "POST /api/intros", "/api/digest/"]) {
+    assert.equal(whole.includes(contained), false, `the index advertises the contained route ${contained}`);
+  }
+  assert.equal(index.legacy_v2?.available, false, "and says the legacy product is unavailable");
 
   // The fit surface is contained the same way, which is why the optional fit step in the main
   // flow is skipped rather than stubbed.
