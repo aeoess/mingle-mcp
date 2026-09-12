@@ -114,9 +114,13 @@ They exist so an existing install keeps working. New installs want the eight.
 ## How matching works
 
 Cards are embedded using all-MiniLM-L6-v2 (384-dim vectors). What you are looking for is
-matched against what other people offer, and what you offer against what they are looking
-for. Results are ordered by cosine similarity. There is no score shown to anyone and no
-ranking of people. That is a protocol invariant with a conformance test.
+matched against what other people offer, and what you offer against what they are looking for.
+The order results come back in reflects that overlap.
+
+What the network never does is rate a person. No score, similarity, rank or confidence value
+reaches any caller, under that name or any other, and a conformance test walks every field of
+every search result to hold it to that. Ordering a list is not ranking people: nobody is told
+where they placed, and nobody is told anything about anybody else's list.
 
 Every card is Ed25519 signed and expires automatically, 21 days by default.
 

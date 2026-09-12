@@ -279,14 +279,19 @@ export function interpretWrite(status, body) {
     // client's own reassurance that nothing was recorded. Demonstrated before the fix with a 426
     // carrying a shell command as its error string.
     const upgradeText = code === "client_upgrade_required" ? (error ?? UPGRADE_REQUIRED_TEXT) : UPGRADE_REQUIRED_TEXT;
+    // ok AND upgrade_required ARE MUTUALLY EXCLUSIVE. A 2xx carrying
+    // code: "client_upgrade_required" used to set both, and canonicalAct checks upgrade_required
+    // first, so a write that DID land would have been reported as "nothing was recorded". A
+    // success is a success: the code on a 2xx body is not a refusal.
+    const ok = status >= 200 && status < 300;
     return {
-        ok: status >= 200 && status < 300,
+        ok,
         status,
         code,
-        error: upgrade ? upgradeText : error,
+        error: ok ? null : (upgrade ? upgradeText : error),
         write_ref: typeof body?.write_ref === "string" ? body.write_ref : null,
         idempotent: body?.idempotent === true,
         body,
-        upgrade_required: upgrade,
+        upgrade_required: ok ? false : upgrade,
     };
 }

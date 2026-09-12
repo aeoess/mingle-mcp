@@ -79,6 +79,14 @@ test("COMPAT: an arbitrary 426 does not speak with Mingle's authority", () => {
 
   // A 426 with no body at all still says the approved sentence.
   assert.equal(c.interpretWrite(426, null).error, c.UPGRADE_REQUIRED_TEXT);
+
+  // ok AND upgrade_required cannot both hold. A 2xx carrying that code used to set both, and
+  // the write path checks upgrade_required first, so a write that DID land would have been
+  // reported to the principal as "nothing was recorded".
+  const succeeded = c.interpretWrite(201, { code: "client_upgrade_required", write_ref: "a".repeat(64) });
+  assert.equal(succeeded.ok, true);
+  assert.equal(succeeded.upgrade_required, false, "a success is never an upgrade refusal");
+  assert.equal(succeeded.error, null, "and it carries no error text");
 });
 
 test("CORPUS: every accepted case reproduces its exact bytes and its digest", () => {

@@ -3,8 +3,9 @@
 // ══════════════════════════════════════════════════════════════
 // This is the default Mingle surface. Eight tools named for what a person is doing, with
 // no version suffix anywhere, and the protocol machinery underneath rather than in the
-// names. The thirty-eight legacy and protocol tools still exist and register only when
-// MINGLE_LEGACY_TOOLS is exactly "1".
+// names. The forty-seven legacy and protocol tools still exist and register only when
+// MINGLE_LEGACY_TOOLS is exactly "1", which is measured from the built server rather than
+// counted by hand: 55 with the switch on, minus these eight.
 //
 // EVERY WRITE THAT CHANGES A CONNECTION GOES THROUGH ONE PATH, `canonicalAct` below, so
 // the envelope, the nonce, the payload gate, the exact-approval echo and the 426 are
@@ -125,7 +126,12 @@ async function canonicalAct(ctx, a) {
     if (!out.ok) {
         return ctx.asText({ refused: true, code: out.code, error: out.error ?? `the server answered ${out.status}`, status: out.status }, true);
     }
-    return ctx.asText({ ...a.done(out), write_ref: out.write_ref, already_done: out.idempotent });
+    // `already_done` reads BOTH idempotency signals. The nonce store answers a byte identical
+    // resend with 200 and idempotent:true. The create map answers a retry that minted a fresh
+    // nonce with 201 and `created: false`, and idempotent:false, so reading only the first left
+    // this always false on the path a real retry actually takes.
+    const alreadyDone = out.idempotent || out.body?.created === false;
+    return ctx.asText({ ...a.done(out), write_ref: out.write_ref, already_done: alreadyDone });
 }
 // ── Shared shapes ─────────────────────────────────────────────────────────
 const CONFIRM = {
@@ -842,7 +848,9 @@ async function serverNote(ctx) {
         return {
             server: {
                 canonical_writes: "supported and preferred",
-                older_clients_accepted_until: cap.legacy_cutoff_at,
+                // OMITTED when there is no cutoff, rather than emitted as null. "accepted until null"
+                // invites a reader to fill in the blank, and the blank means the window is open.
+                ...(cap.legacy_cutoff_at ? { older_clients_accepted_until: cap.legacy_cutoff_at } : {}),
                 ...(cap.legacy_cutoff_at
                     ? { note: `Older Mingle versions stop being able to change a connection at ${cap.legacy_cutoff_at}. This version is not affected.` }
                     : {}),

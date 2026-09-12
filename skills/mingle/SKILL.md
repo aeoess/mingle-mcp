@@ -272,9 +272,11 @@ Browsing is the on-ramp. Publishing is the conversion. Never pressure.
    already released cannot be taken back. If your person wants no further contact after a
    release, that is `manage_intent` with `action: 'block_pair'`.
 
-**Stepping out.** `manage_intent` with `action: 'withdraw_request'` or
-`action: 'withdraw_interest'` ends an introduction in one action, right up until contact is
-released. It also closes any unfinished plan and takes back an unreleased contact line with
+**Stepping out.** Which one depends on which side your person is. The person who ASKED uses
+`manage_intent` with `action: 'withdraw_request'`. The person who was asked, and said they were
+interested, uses `action: 'withdraw_interest'`. Each is refused to the other side, so read
+`direction` on the inbox row before choosing. Either ends the introduction in one action, right
+up until contact is released. It also closes any unfinished plan and takes back an unreleased contact line with
 it. After a release there is nothing left to withdraw, and the tool says so and points at
 `block_pair`.
 
