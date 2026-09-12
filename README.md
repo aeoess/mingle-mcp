@@ -107,9 +107,9 @@ Restart your AI client.
 | `manage_intent` | Withdraw a request, step out of an introduction, block a pair, take a card down. |
 | `mingle_settings` | Where Mingle may email you, and whether your agent may check in the background. |
 
-Forty-six older tools, including the fit-exchange and fit-policy protocol machinery, are still
-in the package and register only when `MINGLE_LEGACY_TOOLS` is exactly `1`. They exist so an
-existing install keeps working. New installs want the eight.
+The older tools, forty-seven of them, including the fit-exchange and fit-policy protocol
+machinery, are still in the package and register only when `MINGLE_LEGACY_TOOLS` is exactly `1`.
+They exist so an existing install keeps working. New installs want the eight.
 
 ## How matching works
 

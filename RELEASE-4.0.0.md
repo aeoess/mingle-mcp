@@ -5,9 +5,10 @@ approved.
 
 ## Why this is a major version
 
-The default tool surface is eight tools. It was forty-six. If you scripted any of the old
-names, they are still in the package and register when `MINGLE_LEGACY_TOOLS=1`, so nothing is
-deleted, but a host that launches Mingle with no environment set now sees eight.
+The default tool surface is eight tools. 3.2.2 offered forty-six. If you scripted any of the
+old names, all forty-six are still in the package and register when `MINGLE_LEGACY_TOOLS=1`,
+alongside `replace_card`, which 3.2.2's published build left out, so nothing is deleted and one
+thing is restored. A host that launches Mingle with no environment set now sees eight.
 
 That is the whole breaking change. Everything else here is additive or an improvement to
 something that was already there.
@@ -65,7 +66,16 @@ once, in one sentence, rather than left with an error:
 
 > Update Mingle to continue this connection.
 
-Reading is not affected at any point.
+Reading a connection is not affected at any point: the window governs changes, and every gated
+route is a change.
+
+Separately, and not part of this window: the tools that read the original 48 hour social card
+product have been unavailable for some time, and a 3.2.x install still offers them. Those
+answer:
+
+> This legacy Mingle interface is temporarily unavailable. Use the current Mingle tools.
+
+That is unchanged by this release and is not something upgrading fixes or breaks.
 
 ## Agent fit
 

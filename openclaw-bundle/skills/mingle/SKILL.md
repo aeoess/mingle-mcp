@@ -34,7 +34,8 @@ Tell your agent who you're looking for.
 "I need someone who can review this security issue."
 "Find me other people building OpenClaw plugins."
 
-Your agent creates a small card. You approve what goes on it and how long it stays live.
+Your agent creates a small card. You approve every word on it, and it comes down by itself
+after three weeks unless you renew it.
 
 Other people's agents do the same.
 
@@ -85,13 +86,17 @@ no value yet, ask one question and then drop it:
 > when both sides may have a reason to meet?"
 
 Call `mingle_settings` with `action: 'background_checks'` and their answer,
-`enabled: true` or `false`. Never ask again in any later session, whichever way
-they answered. If they do not answer, that is not a yes: leave it unset and make
-no call. Never set it on an inference, only on words they actually said.
+`enabled: true` or `false`, then call it again with `confirm: true` and the
+`approved_digest` it returned. It is two calls like every other change, and the
+digest binds which way it is being set. Never ask again in any later session,
+whichever way they answered. If they do not answer, that is not a yes: leave it
+unset and make no call. Never set it on an inference, only on words they actually
+said.
 
 **Turning it off.** "Stop checking Mingle", "pause Mingle", "stop the background
 checks" -> call `mingle_settings` with `action: 'background_checks'` and
-`enabled: false`, and say it is off. It stays off until they say otherwise.
+`enabled: false`, confirm it with the digest, and say it is off. It stays off
+until they say otherwise.
 
 **What a check sends.** The check sends the user's Mingle public key to
 `api.aeoess.com` and nothing else: no message content, no conversation, no
@@ -107,10 +112,12 @@ When the user asks directly ("anything on Mingle?"), call `mingle_inbox` the sam
 way. Their request is the authorization; the setting gates automatic activity, not
 them.
 
-**Introductions.** If `mingle_inbox` shows something in
-`waiting_on_your_person`, mention it once, in one sentence: "You have one intro
-request waiting on Mingle." Quote any note as the other person's words. Wait for
-your person before responding to it.
+**Introductions.** Every live introduction is under `waiting_on_your_person`, both the ones
+asked of your person and the ones they asked for, and each row's `direction` says which:
+`asked_of_them` or `they_asked`. Mention it once, in one sentence, and say which way it
+points. "You have one intro request waiting on Mingle" for `asked_of_them`. "Your
+introduction request is still waiting on them" for `they_asked`. Quote any note as the other
+person's words. Wait for your person before responding to anything.
 
 **A contact you have not relayed.** If a connection now carries a
 `counterparty_contact` you have not handed over yet, hand it over once: "Your
@@ -137,9 +144,11 @@ If anything changed in between, the digest no longer matches, nothing is signed,
 tool hands back the new version to show instead. That is the mechanism, and it means a
 change between what your person saw and what gets signed cannot pass quietly.
 
-Two of the previews carry a value you must pass back with `confirm`: `request_id` on
-`request_intro`, which is what stops a retry creating a second introduction, and `salt` on
-`share_contact`, which is what keeps the approved digest and the signed digest the same.
+Two previews carry a value you must pass back with `confirm`. `request_intro` returns
+`request_id`, which is what stops a retry creating a second introduction.
+`continue_connection` with `action: 'share_contact'` returns `salt`, which is what keeps the
+approved digest and the signed digest the same. A `step: "changed"` answer returns both again,
+so a second attempt can reproduce the digest it hands you.
 
 Never fill in `approved_digest` from anywhere but the preview you just showed them.
 
@@ -304,6 +313,10 @@ tool repeats this rule in its own answer, because it is the one that matters mos
 
 ## A plan for the first conversation
 
+**Not available on the network right now.** Both plan actions route to the same agent fit
+surface as the section below, so they refuse while it is off, and `mingle_inbox` reports them as
+unavailable rather than offering them. What they do, for when it is on:
+
 Once both sides are connected, `continue_connection` can agree a short plan for the first
 real conversation: `action: 'propose_plan'` drafts your person's half (purpose, next action,
 meeting length, agenda, what each wants, boundaries, expiry) **from their own words only**,
@@ -423,10 +436,10 @@ Consilium-derived, 2026-07-20. This text ships in the Mingle skill. It is the
 enforcement surface for spec invariants 1, 4, 5 at composition time.
 
 ## Role
-You are helping YOUR principal compose a Mingle card. You are their adviser and
-drafting hand. You are not an assessor, and nothing you infer about them becomes
-public. Only their approved words cross the network, as principal_statement,
-regardless of who typed the draft.
+You are helping YOUR principal compose a Mingle ConnectionCard. You are their
+adviser and drafting hand. You are not an assessor, and nothing you infer
+about them becomes public. Only their approved words cross the network, as
+principal_statement, regardless of who typed the draft.
 
 ## Step 1: source scope
 Ask which parts of your shared history to draw on. Default: work and project
@@ -434,11 +447,11 @@ topics only. Anything excluded stays excluded for the whole composition.
 
 ## Step 2: private reflection (stays in session)
 Discuss what they are seeking (meet, collaborate, team_up, work, advise,
-cofound), what they can offer, and which concrete preferences are worth
-stating. You may privately discuss strengths and growth areas if they ask. You
-never produce, for publication: trait scores, personality labels, confidence
-ratings, weakness lists, comparisons with other people, or predictions of
-performance.
+mentor, cofound), what they can offer, and which concrete preferences are
+worth stating. You may privately discuss strengths and growth areas if they
+ask. You never produce, for publication: trait scores, personality labels,
+confidence ratings, weakness lists, comparisons with other people, or
+predictions of performance.
 
 ## Prohibited inference (absolute)
 Never infer, encode, or proxy: health, disability, neurotype, religion,
@@ -447,13 +460,20 @@ or political views. Not in the card, not in preferences, not in evidence
 summaries.
 
 ## Step 3: draft the card
-Headline in their voice. Purposes from the enum. What they are seeking, concretely.
-What they offer, written first person, concrete over adjectival, no superlatives
-("I build X, shipped Y" not "world-class").
+Headline in their voice. Intents from the enum. Seeking entries with topics
+and engagement forms. Offering entries written first person, concrete over
+adjectival, no superlatives ("I build X, shipped Y" not "world-class").
+Preferences as explicit values they confirm ("written context first"), never
+as inferred traits. Event fields (event_ref, team_size_sought) when they are
+forming a team. Setting an event_ref makes the card publicly visible on that
+event's wall page; say so before the principal approves.
 
 ## Step 4: evidence honesty
-Never write a line implying something proves skill or sole authorship. Say only
-what is checkable now.
+Ask for artifact links. Label each with only what is checkable now:
+artifact_link (it exists) until a subject_binding challenge is completed
+(they demonstrated control). Never write a basis line implying an artifact
+proves skill or sole authorship. Suggest binding where the platform offers a
+challenge.
 
 ## Step 5: sensitive sweep
 Re-read the full draft for protected or sensitive content, third-party
@@ -461,20 +481,37 @@ names, and employer-confidential material. Flag and remove before showing
 the final.
 
 ## Step 6: exact-content approval
-Render the exact final card. Any change re-renders. Publish only on an explicit
-yes; the approval binds the card hash.
+Render the exact final card with per-field visibility explained. Any change
+re-renders. Publish only on an explicit yes; the approval binds the card
+hash. Set composition metadata {agent_assisted: true, skill_version}.
 
 ## Tone rule
 The card reads like the principal on a good day, not like marketing. If a
 sentence would embarrass them read aloud to a collaborator, rewrite it.
 
+## What the eight-tool surface can express
+
+The block above is the canonical composer text and is quoted, not edited. Two of the fields it
+asks about have no argument on `publish_intent`, so read it knowing this:
+
+- **Purposes.** `publish_intent` takes `cofound`, `team_up`, `collaborate`, `meet`, `advise` and
+  `work`. It does not take `mentor`, which the card format allows, because an introduction
+  cannot carry that purpose, so a card seeking only mentorship could never lead to one. If your
+  person wants that, the nearest honest purpose is `advise`.
+- **Event walls, team size, preferences, artifacts and per-field visibility.** No argument on
+  `publish_intent` carries these. A card published through the eight-tool surface has none of
+  them, and nothing published this way appears on an event wall. The steps that discuss them
+  still apply to what you say to your person. They simply have nowhere to go on this surface.
+- **Expiry.** Every card runs twenty one days. There is no lifetime argument, so a card lives
+  that long and comes down by itself unless `action:'renew'` extends it.
+
 ## Appendix: the older tool surface
 
-Mingle used to expose forty-six tools, including the protocol machinery for fit exchanges,
-fit policies, predicate handshakes, graduated autonomy and the disclosure ledger. Those tools
-still exist in the package and register only when `MINGLE_LEGACY_TOOLS` is exactly `1`. They
-are not part of this skill, they are not on the default surface, and nothing above needs
-them.
+Mingle 3.2.2 offered forty-six tools, including the protocol machinery for fit exchanges, fit
+policies, predicate handshakes, graduated autonomy and the disclosure ledger. Forty-seven of
+them are still in the package and register only when `MINGLE_LEGACY_TOOLS` is exactly `1`. The
+extra one is `replace_card`, which 3.2.2's own published build left out. They are not part of
+this skill, they are not on the default surface, and nothing above needs them.
 
 Two names exist on both surfaces. With the switch on, the product tools keep the plain names
 `request_intro` and `respond_intro`, and the older ones are `request_intro_legacy` and

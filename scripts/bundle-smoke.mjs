@@ -6,7 +6,7 @@
 // skills/mingle/_meta.json "tools".
 
 import { spawn } from "node:child_process";
-import { cpSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -35,11 +35,25 @@ const pluginData = join(stage, "plugin-data");
 const expand = (s) =>
   s.replaceAll("${PLUGIN_ROOT}", bundleRoot).replaceAll("${PLUGIN_DATA}", pluginData);
 
-const args = (entry.args ?? []).map(expand);
+// LOCAL MODE, for the window before a release is published.
+//
+// .mcp.json pins an exact version, which is the point: the launch is reproducible. But between
+// the version bump and the npm publish, that version does not exist, so the npm form cannot
+// run and this gate would be red for a reason that is not drift. MINGLE_SMOKE_LOCAL=1 launches
+// build/index.js from this checkout, which is the artifact the package will ship, so the
+// comparison against _meta.json still means what it says.
+const LOCAL = process.env.MINGLE_SMOKE_LOCAL === "1";
+const command = LOCAL ? process.execPath : entry.command;
+const args = LOCAL ? [join(root, "build", "index.js")] : (entry.args ?? []).map(expand);
 const env = { ...process.env, PLUGIN_ROOT: bundleRoot, PLUGIN_DATA: pluginData };
 for (const [k, v] of Object.entries(entry.env ?? {})) env[k] = expand(v);
+// A throwaway HOME, so a smoke run never touches the developer's own ~/.mingle.
+env.HOME = join(stage, "home");
+env.USERPROFILE = env.HOME;
+mkdirSync(env.HOME, { recursive: true });
+if (LOCAL) console.log(`MINGLE_SMOKE_LOCAL=1, so launching this checkout's build rather than ${entry.args?.join(" ")}`);
 
-console.log(`launching: ${entry.command} ${args.join(" ")}`);
+console.log(`launching: ${command} ${args.join(" ")}`);
 console.log(`env from .mcp.json: ${JSON.stringify(entry.env ?? {})}`);
 
 // .mcp.json declares no cwd, so OpenClaw defaults it to the plugin root
@@ -47,7 +61,7 @@ console.log(`env from .mcp.json: ${JSON.stringify(entry.env ?? {})}`);
 const cwd = entry.cwd ? expand(entry.cwd) : bundleRoot;
 console.log(`cwd: ${cwd} (plugin root; .mcp.json declares no cwd)`);
 
-const child = spawn(entry.command, args, { cwd, env, stdio: ["pipe", "pipe", "pipe"] });
+const child = spawn(command, args, { cwd, env, stdio: ["pipe", "pipe", "pipe"] });
 
 let stdout = "";
 let stderr = "";

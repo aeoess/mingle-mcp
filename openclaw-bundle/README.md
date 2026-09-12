@@ -19,7 +19,7 @@ The headings below match the ClawSweeper handoff checklist on
 | --- | --- |
 | `$schema` | `https://agent-plugins.org/schemas/1.0.0/plugin.schema.json` |
 | `name` | `Mingle` |
-| `version` | `3.2.0` |
+| `version` | `4.0.0` |
 | `license` | `Apache-2.0` |
 | `homepage` | `https://aeoess.com/mingle` |
 | `author` | AEOESS |
@@ -57,21 +57,27 @@ bundle contributes two things:
    behavior rules that tell an agent when to reach for Mingle tools, and
    `skills/mingle/_meta.json` carries the listing metadata.
 2. **An MCP server**, declared in `.mcp.json`. The process entrypoint is the
-   stdio command in that file: `npx -y mingle-mcp@3.2.0`. OpenClaw merges bundle
+   stdio command in that file: `npx -y mingle-mcp@4.0.0`. OpenClaw merges bundle
    MCP config into the effective embedded settings as `mcpServers` and launches
    the stdio server during embedded agent turns
    (`docs/plugins/bundles.md:104-108`).
 
-The server exposes 45 tools. OpenClaw registers them with provider-safe names in
-the form `serverName__toolName` (`docs/plugins/bundles.md:169-171`), so the
-server key `mingle` produces `mingle__search_matches`, `mingle__request_intro`,
+The server exposes 8 tools by default: `publish_intent`, `find_people`,
+`mingle_inbox`, `request_intro`, `respond_intro`, `continue_connection`,
+`manage_intent` and `mingle_settings`. OpenClaw registers them with provider-safe
+names in the form `serverName__toolName` (`docs/plugins/bundles.md:169-171`), so
+the server key `mingle` produces `mingle__find_people`, `mingle__request_intro`,
 and so on.
+
+The forty-seven older tools register only when `MINGLE_LEGACY_TOOLS` is exactly
+`1`, which this bundle does not set. A host that wants them adds it to the `env`
+block in `.mcp.json`.
 
 `npx` is declared as a bare executable name, which is what the format allows: a
 stdio `command` must be a bare executable name or a `./`-relative path inside the
 plugin (`docs/plugins/bundles.md:236`). No `./bin/` shim is vendored, because the
 docs do not require the executable to live inside the plugin. The version is
-pinned to `mingle-mcp@3.2.0` so the launch is reproducible.
+pinned to `mingle-mcp@4.0.0` so the launch is reproducible.
 
 `"type": "stdio"` is present because the Agent Plugins loader requires it. The
 prose in `docs/plugins/bundles.md:229` only lists the supported transports and the
@@ -91,7 +97,7 @@ openclaw plugins install ./openclaw-bundle
 
 # Once published on ClawHub
 openclaw plugins install clawhub:mingle
-openclaw plugins install clawhub:mingle@3.2.0
+openclaw plugins install clawhub:mingle@4.0.0
 ```
 
 Verify detection, then restart the gateway so the mapped features load:
@@ -119,7 +125,7 @@ An unversioned ClawHub install keeps an unversioned recorded spec, so
 `openclaw plugins update` follows newer releases; an explicit `@<version>`
 selector stays pinned to that selector (`docs/cli/plugins.md:322`).
 
-Because `.mcp.json` pins `mingle-mcp@3.2.0`, updating the npm package alone does
+Because `.mcp.json` pins `mingle-mcp@4.0.0`, updating the npm package alone does
 not change what OpenClaw launches. A new server version ships as a new bundle
 version with the pin bumped.
 
@@ -153,7 +159,8 @@ The file holds `principalId`, `publicKey`, `privateKey`, and `registeredAt`. The
 private key never leaves the machine; it signs requests to the network. Back up
 or delete that file to move or reset an identity. Three sibling files in the same
 directory hold non-secret local state: `last-card.json`, `preferences.json`, and
-`cooldowns.json`.
+`cooldowns.json`, plus `v3-pulse.json`, which holds the background checking
+setting the skill tells users they can read or delete, and `v3-cards.json`.
 
 `.mcp.json` declares one environment variable, and it is the only one the server
 reads:
@@ -180,9 +187,10 @@ Anything new on Mingle this week?
 Yes, introduce me to that person, and tell them I have time on Thursday.
 ```
 
-The first drafts and publishes an intent card after the user approves the wording.
-The second reads pending matches. The third is the user side of the double
-opt-in: no contact details move until the other person's agent gets the same yes.
+The first drafts and publishes a card after the user approves the exact wording.
+The second reads what is waiting, through `mingle_inbox`, which changes nothing.
+The third is the user side of the double opt-in: saying they are interested shares
+nothing, and no contact details move until both sides have chosen to share.
 
 ## Smoke test and proof command
 

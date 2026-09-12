@@ -439,10 +439,21 @@ test("SKILL keeps every session-start call inside the Rule 1 gate", () => {
   assert.equal(readFileSync(join(root, "openclaw-bundle", "skills", "mingle", "SKILL.md"), "utf-8"), skill, "the bundle copy matches");
 });
 
-test("SKILL names the eight tools and no tool outside them, except in the legacy appendix", () => {
-  // The SKILL is what a host model reads before it reads any tool description. A name in here
-  // that is not on the default surface is an instruction to call something that does not
-  // exist, which is worse than an omission because the model will try.
+test("SKILL names no tool a 4.0.0 install does not offer", () => {
+  // A name in here that is not on the default surface is an instruction to call something that
+  // does not exist, which is worse than an omission because the model will try.
+  //
+  // THE HOLES THIS CLOSES. The first version of this test compared every backticked snake_case
+  // identifier against one flat allow-list that mixed tool names with `action` VALUES. So
+  // `share_contact` and `take_card_down`, which are actions, sat in the list as if they were
+  // tools, and a sentence calling them tools passed. And the regex required backticks, so an
+  // unbackticked dead name was invisible. Both were demonstrated: a line reading
+  // "Call `share_contact` and `take_card_down` as tools, then call get_card_status and
+  // check_pending_matches" passed cleanly.
+  //
+  // So this checks the thing that actually matters, against the authoritative list: none of the
+  // forty-six names the published 3.2.2 surface offered may appear in the body at all, backticks
+  // or not, except the two the product surface now owns.
   const skill = readFileSync(join(root, "skills", "mingle", "SKILL.md"), "utf-8");
   const appendixAt = skill.indexOf("## Appendix: the older tool surface");
   assert.ok(appendixAt > 0, "the legacy surface is documented in one place, at the end");
@@ -456,18 +467,41 @@ test("SKILL names the eight tools and no tool outside them, except in the legacy
     assert.ok(body.includes(name), `${name} is not mentioned anywhere in the SKILL`);
   }
 
-  // Every backticked snake_case identifier in the body has to be one of the eight, a setting,
-  // or a file. Anything else is a tool name that no longer resolves.
-  const allowed = new Set([
-    ...EIGHT,
-    "background_checks", "share_contact", "withdraw_contact", "propose_plan", "approve_plan",
-    "withdraw_request", "withdraw_interest", "block_pair", "take_card_down", "not_now_and_block",
-    "stop_email", "set_email", "approved_digest", "request_id", "confirm",
-    "counterparty_contact", "waiting_on_your_person", "principal_statement", "team_up",
-    "event_ref", "skill_version", "not_now", "MINGLE_LEGACY_TOOLS",
-  ]);
+  // The 3.2.2 surface, read from its own published build rather than retyped.
+  const PUBLISHED_3_2_2 = [
+    "publish_intent_card", "search_matches", "get_digest", "respond_to_intro",
+    "remove_intent_card", "rate_connection", "compose_connection_card", "publish_connection_card",
+    "compose_opportunity_card", "publish_opportunity_card", "search_cards", "withdraw_card",
+    "supersede_claims", "revoke_agent_authority", "delete_server_copy", "stop_new_matches",
+    "request_counterparty_deletion", "set_background_checks", "get_card_status", "renew_card",
+    "set_notifications", "request_intro_v3", "list_intros", "check_pending_matches",
+    "complete_intro", "set_disclosures", "get_fit_exchange", "answer_fit", "request_more",
+    "close_fit", "get_fit_record", "set_fit_policy", "prioritize_candidates",
+    "request_fit_handshake", "commit_fit_handshake", "get_fit_handshake", "reveal_dimension",
+    "answer_fit_v4", "request_more_v4", "set_fit_autonomy", "pause_fit_autonomy",
+    "get_fit_activity", "propose_first_step", "approve_first_step", "replace_card",
+  ];
+  // Word boundaries, so `renew_card` is caught and `action: 'renew'` is not.
+  const dead = PUBLISHED_3_2_2.filter(n => new RegExp(`\\b${n}\\b`).test(body));
+  assert.deepEqual(dead, [], `the SKILL body names tools a 4.0.0 install does not offer: ${dead.join(", ")}`);
+
+  // And every backticked snake_case identifier is either a tool, an argument, an action value,
+  // a response field, a setting, or a file. Kept as a second, weaker net, with the two kinds
+  // listed separately so an action can never stand in for a tool.
+  const ACTIONS = [
+    "share_contact", "withdraw_contact", "propose_plan", "approve_plan", "withdraw_request",
+    "withdraw_interest", "block_pair", "take_card_down", "not_now_and_block", "not_now",
+    "stop_email", "set_email", "background_checks", "team_up",
+  ];
+  const FIELDS = [
+    "approved_digest", "request_id", "confirm", "counterparty_contact", "waiting_on_your_person",
+    "asked_of_them", "they_asked", "principal_statement", "event_ref", "skill_version",
+    "team_size_sought", "artifact_link", "subject_binding", "agent_assisted", "card_hash",
+    "MINGLE_LEGACY_TOOLS",
+  ];
+  const allowed = new Set([...EIGHT, ...ACTIONS, ...FIELDS]);
   const found = new Set<string>();
   for (const m of body.matchAll(/`([A-Za-z][A-Za-z0-9]*_[A-Za-z0-9_]+)`/g)) found.add(m[1]);
   const unknown = [...found].filter(n => !allowed.has(n));
-  assert.deepEqual(unknown, [], `the SKILL names identifiers that are not on the default surface: ${unknown.join(", ")}`);
+  assert.deepEqual(unknown, [], `the SKILL names identifiers nothing accounts for: ${unknown.join(", ")}`);
 });

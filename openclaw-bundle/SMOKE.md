@@ -14,6 +14,13 @@ over stdio, calls `tools/list`, and asserts that the tool count matches the
 `tools` field in `skills/mingle/_meta.json`. It exits nonzero on any mismatch, so
 the metadata and the running server cannot drift apart silently.
 
+**Before a release is published**, `.mcp.json` names a version npm does not have
+yet, so the npm form cannot run. Set `MINGLE_SMOKE_LOCAL=1` to launch
+`build/index.js` from this checkout instead, which is the same artifact the
+package will ship. The recorded output below is from 3.2.0 and is kept as the
+historical record of that release, not as a claim about this one: the default
+surface is 8 tools now, not 45.
+
 **The install half, run on 2026-09-08 on Node v24.20.0** (this machine carries it
 under ~/.n; the default shell is on v24.11.1, which OpenClaw refuses). Against a
 scratch state dir with the OpenClaw checkout's own CLI:

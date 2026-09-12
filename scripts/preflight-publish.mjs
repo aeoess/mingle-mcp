@@ -9,11 +9,13 @@
 //
 // WHAT IT CHECKS AND WHY:
 //
-//  1 ONE VERSION, IN EVERY PLACE THAT CARRIES ONE. Six files state a version and they are
-//    read by different things: npm, the setup command a person copies from the README, the
-//    version an MCP host displays, the skill directory, the bundle package and the bundle
-//    plugin manifest. A version that agrees in five of six is a version that will be wrong
-//    somewhere a person can see.
+//  1 ONE VERSION, IN EVERY PLACE THAT CARRIES ONE. Ten files state a version and they are read
+//    by different things: npm, the MCP registry, the command that launches in an OpenClaw
+//    bundle, the setup command a person copies, the version an MCP host displays, the skill
+//    directory, two bundle manifests, and four markdown files. A version that agrees in nine of
+//    ten is a version that will be wrong somewhere a person can see. It also checks the tool
+//    count the skill directory declares and the tool list the registry renders, because both are
+//    advertisements and a stale one promises a tool a fresh install does not have.
 //
 //  2 THE BUILT ARTIFACT IS THE COMMITTED SOURCE. build/ is what npm ships, and src/ is what
 //    was reviewed. A clean rebuild must reproduce the committed build/ byte for byte, or the
@@ -51,8 +53,19 @@ const VERSION = pkg.version
 // ── 1. One version everywhere ─────────────────────────────────────────────
 console.log(`\n1. every version reference says ${VERSION}`)
 {
+  // EVERY FILE THAT CARRIES A VERSION, and the list was short by four. server.json is the MCP
+  // registry manifest and the most public copy this project ships; .mcp.json is what actually
+  // launches in an OpenClaw bundle; the codex plugin manifest and the bundle README are rendered
+  // to people. All four were left at 3.2.x by a release that this check called OK.
   const places = [
     ['package.json', 'version', () => pkg.version],
+    ['server.json', 'version', () => JSON.parse(readFileSync(join(repo, 'server.json'), 'utf8')).version],
+    ['server.json', 'the npm package version it advertises', () => JSON.parse(readFileSync(join(repo, 'server.json'), 'utf8')).packages[0].version],
+    ['openclaw-bundle/.mcp.json', 'the version it launches', () => {
+      const args = JSON.parse(readFileSync(join(repo, 'openclaw-bundle/.mcp.json'), 'utf8')).mcpServers.mingle.args
+      return (args.join(' ').match(/mingle-mcp@(\S+)/) ?? [])[1]
+    }],
+    ['openclaw-bundle/.codex-plugin/plugin.json', 'version', () => JSON.parse(readFileSync(join(repo, 'openclaw-bundle/.codex-plugin/plugin.json'), 'utf8')).version],
     ['src/setup.ts', 'the install command it writes', () => (readFileSync(join(repo, 'src/setup.ts'), 'utf8').match(/"mingle-mcp@([^"]+)"/) ?? [])[1]],
     ['src/index.ts', 'the version the MCP host displays', () => (readFileSync(join(repo, 'src/index.ts'), 'utf8').match(/name: "mingle",\s*\n\s*version: "([^"]+)"/) ?? [])[1]],
     ['skills/mingle/_meta.json', 'version', () => JSON.parse(readFileSync(join(repo, 'skills/mingle/_meta.json'), 'utf8')).version],
@@ -66,8 +79,8 @@ console.log(`\n1. every version reference says ${VERSION}`)
     if (found === VERSION) ok(`${file} (${what})`)
     else bad(`${file} (${what}) says ${JSON.stringify(found)}, not ${VERSION}`, 'a person copies the install line from whichever file they happen to read.')
   }
-  // The SKILL and the README both print the install command to a human.
-  for (const file of ['skills/mingle/SKILL.md', 'README.md']) {
+  // Every markdown file that prints an install command or a version to a human.
+  for (const file of ['skills/mingle/SKILL.md', 'README.md', 'RELEASE-' + VERSION + '.md', 'openclaw-bundle/README.md']) {
     const body = readFileSync(join(repo, file), 'utf8')
     const stale = [...body.matchAll(/mingle-mcp(?:-setup)?@([0-9][^\s`)]*)/g)].map(m => m[1]).filter(v => v !== VERSION)
     if (stale.length === 0) ok(`${file} names no version but ${VERSION}`)
@@ -77,6 +90,18 @@ console.log(`\n1. every version reference says ${VERSION}`)
   const meta = JSON.parse(readFileSync(join(repo, 'skills/mingle/_meta.json'), 'utf8'))
   if (meta.tools === 8) ok('_meta.json declares 8 tools, which is the default surface')
   else bad(`_meta.json declares ${meta.tools} tools`, 'the default surface is eight. A directory renders this number beside the install button.')
+
+  // server.json's tool list is rendered by the registry, so a stale name there is an
+  // advertisement for a tool a fresh install does not have.
+  const serverJson = JSON.parse(readFileSync(join(repo, 'server.json'), 'utf8'))
+  const advertised = (serverJson.tools ?? []).map(t => t.name).sort()
+  const EIGHT_SORTED = [
+    'continue_connection', 'find_people', 'manage_intent', 'mingle_inbox',
+    'mingle_settings', 'publish_intent', 'request_intro', 'respond_intro',
+  ]
+  if (JSON.stringify(advertised) === JSON.stringify(EIGHT_SORTED)) ok('server.json advertises exactly the eight')
+  else bad(`server.json advertises ${advertised.length} tool(s): ${advertised.join(', ')}`,
+    'the registry renders this list. A name here that a fresh install does not offer is an advertisement for something that is not there.')
 }
 
 // ── 2. The built artifact is the committed source ──────────────────────────
