@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // ══════════════════════════════════════════════════════════════
-// Mingle MCP — Your AI finds the right people for you.
+// Mingle MCP: your AI finds the right people for you.
 // Eight product tools. One network. No app, no signup.
 // Powered by Agent Passport System (aeoess.com)
 // ══════════════════════════════════════════════════════════════
@@ -24,7 +24,7 @@ import { sanitize } from "./sanitize.js";
 import { CANONICAL_TOOL_NAMES, registerCanonicalTools } from "./tools-canonical.js";
 const SKILL_VERSION = "mingle-composer-v1";
 const API = process.env.MINGLE_API_URL || "https://api.aeoess.com";
-// Persistent identity — loaded from ~/.mingle/identity.json
+// Persistent identity, loaded from ~/.mingle/identity.json
 const identity = loadIdentity();
 const prefs = loadPreferences();
 const keys = { publicKey: identity.publicKey, privateKey: identity.privateKey };
@@ -126,12 +126,12 @@ server.tool = (name, ...rest) => {
 // ══════════════════════════════════════
 // Tool 1: publish_intent_card
 // ══════════════════════════════════════
-server.tool("publish_intent_card", "Publish your profile to the Mingle network — what you're looking for and what you can offer. Cards are Ed25519 signed with your persistent identity and expire after 48h. Returns your top matches immediately.", {
+server.tool("publish_intent_card", "Publish your profile to the Mingle network: what you're looking for and what you can offer. Cards are Ed25519 signed with your persistent identity and expire by themselves. Returns overlaps with other cards immediately. This is the older surface. publish_intent is the current one.", {
     name: z.string().describe("Your name or alias"),
     topic: z.string().optional().describe("What you're working on (short summary)"),
     needs: z.array(z.string()).optional().describe("What you're looking for (plain text list)"),
     offers: z.array(z.string()).optional().describe("What you can provide (plain text list)"),
-    context: z.string().optional().describe("Rich context for better matching (private — never shown to others)"),
+    context: z.string().optional().describe("Rich context for better matching. Private, and never shown to anyone else."),
     open_to: z.array(z.string()).optional().describe("Open to (e.g. 'introductions', 'partnerships')"),
     hours: z.number().default(48).describe("Hours until card expires (default 48)"),
 }, async (args) => {
@@ -208,7 +208,7 @@ server.tool("publish_intent_card", "Publish your profile to the Mingle network �
 // ══════════════════════════════════════
 // Tool 2: search_matches
 // ══════════════════════════════════════
-server.tool("search_matches", "Find people relevant to you on the Mingle network. Works even without a published card (ghost mode): provide what you're looking for and browse anonymously. Returns ranked matches based on semantic similarity between needs and offers.", {
+server.tool("search_matches", "Find people relevant to you on the Mingle network. Works even without a published card: provide what you're looking for and browse without publishing anything. Returns overlaps between what each side is looking for and offering, in their own words, with no score and no ranking of anyone. This is the older surface. find_people is the current one.", {
     min_score: z.number().optional().describe("Minimum relevance score 0-1 (default: 0.3)"),
     max_results: z.number().optional().describe("Max results (default: 15)"),
     query_needs: z.array(z.string()).optional().describe("Ghost mode: describe what you need without a published card"),
@@ -421,7 +421,7 @@ server.tool("remove_intent_card", "Remove your card from the Mingle network. You
 // ══════════════════════════════════════
 // Tool 7: rate_connection
 // ══════════════════════════════════════
-server.tool("rate_connection", "Rate a connection you made through Mingle. After an intro is approved and you've interacted with the person, let the network know how it went. This helps improve matching for everyone.", {
+server.tool("rate_connection", "Rate a connection you made through Mingle. After an intro is approved and you have met the person, record how it went. Nothing about a rating is shown to the other person and nothing ranks anyone. This is the older surface and the network route behind it is currently unavailable.", {
     intro_id: z.string().describe("Intro ID of the connection to rate"),
     rating: z.enum(["useful", "neutral", "not_useful"]).describe("How useful was this connection?"),
     comment: z.string().optional().describe("Optional: brief note on why"),
