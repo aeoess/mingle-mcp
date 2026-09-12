@@ -62,19 +62,46 @@ async function startApi(): Promise<string> {
       // steps are skipped rather than stubbed because the surface is off.
       MINGLE_FIT_ENABLED: undefined as any,
       MINGLE_V2_ENABLED: undefined as any,
+      // The compatibility clock is the TEST's to control, never inherited. With this set, the
+      // server stamps a cutoff at boot, the legacy window closes, and the grandfathering test
+      // fails for a reason that has nothing to do with the code.
+      MINGLE_CANONICAL_MCP_RELEASED_AT: undefined as any,
       NODE_TEST_CONTEXT: undefined as any,
     },
     stdio: ["ignore", "pipe", "pipe"],
   });
   const url = `http://127.0.0.1:${port}`;
-  for (let i = 0; i < 120; i++) {
-    try {
-      const r = await fetch(`${url}/health`);
-      if (r.ok) return url;
-    } catch { /* not up yet */ }
-    await new Promise(r => setTimeout(r, 250));
+
+  // WAIT FOR OUR OWN CHILD TO SAY IT IS LISTENING, never for the port to answer.
+  //
+  // THE DEFECT THIS CLOSES. Polling `${url}/health` cannot tell this server from any other
+  // server already on that port. The port is picked at random from a thousand, so a stale or
+  // unrelated API in the same range made the child fail to bind with EADDRINUSE while the poll
+  // succeeded against the stranger, and the whole suite then ran against a server nobody in
+  // this file configured. It was observed: one run failed the grandfathering test with a 426
+  // because the server it reached had a stamped cutoff, and the next run passed. A test that
+  // can silently talk to the wrong server passes and fails for reasons unrelated to the code.
+  const listening = new Promise<void>((resolve, reject) => {
+    let out = "";
+    const onData = (chunk: Buffer) => {
+      out += chunk.toString();
+      if (out.includes(`running on port ${port}`)) resolve();
+    };
+    apiProc!.stdout?.on("data", onData);
+    apiProc!.stderr?.on("data", onData);
+    apiProc!.on("exit", code => reject(new Error(`the API exited with code ${code} before it listened. Its output:\n${out}`)));
+    setTimeout(() => reject(new Error(`the API did not announce itself on port ${port} in 60s. Its output:\n${out}`)), 60000);
+  });
+  await listening;
+
+  // And the server that answers is the one this test configured. Checked before any test runs,
+  // so a hijacked port or an inherited variable is a loud failure here rather than a confusing
+  // one later.
+  const cap: any = (await (await fetch(`${url}/`)).json())?.write_authorization;
+  if (cap?.legacy_cutoff_at !== null || cap?.legacy_accepted !== true) {
+    throw new Error(`the API on port ${port} is not the one this test started: its legacy window is ${JSON.stringify(cap)}`);
   }
-  throw new Error("the API did not come up");
+  return url;
 }
 
 /** One principal: their own HOME, their own identity, their own MCP process. */

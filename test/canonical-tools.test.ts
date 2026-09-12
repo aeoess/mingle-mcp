@@ -397,7 +397,10 @@ test("INBOX: the session start gate is reported and never decided here, and no r
   // With background checking on, the sentence changes and nothing else does.
   const set = await callTool("mingle_settings", { action: "background_checks", enabled: true });
   assert.equal(set.out.step, "preview");
-  await callTool("mingle_settings", { action: "background_checks", enabled: true, confirm: true });
+  assert.match(set.out.approved_digest, /^[0-9a-f]{64}$/, "the preview binds which way it is being set");
+  await callTool("mingle_settings", {
+    action: "background_checks", enabled: true, confirm: true, approved_digest: set.out.approved_digest,
+  });
   const after = await callTool("mingle_inbox", {});
   assert.equal(after.out.background_checks, "on");
   assert.match(after.out.session_start_rule, /may be read at session start/);
@@ -405,9 +408,133 @@ test("INBOX: the session start gate is reported and never decided here, and no r
 });
 
 test("SETTINGS: background checking is off until the principal answers, and Mingle never asks on its own", async () => {
-  const off = await callTool("mingle_settings", { action: "background_checks", enabled: false, confirm: true });
+  const pv = await callTool("mingle_settings", { action: "background_checks", enabled: false });
+  const off = await callTool("mingle_settings", {
+    action: "background_checks", enabled: false, confirm: true, approved_digest: pv.out.approved_digest,
+  });
   assert.equal(off.out.background_checks, "off");
   const show = await callTool("mingle_settings", { action: "show" });
   assert.equal(show.out.background_checks, "off");
   assert.match(show.out.background_checks_note, /Mingle never turns this on by itself/);
+});
+
+test("CARD APPROVAL: a publish digest cannot authorize a replace of somebody's card", async () => {
+  // THE DEFECT THIS CLOSES. The approval digest was sha256(jcs(card)) over the four content
+  // fields alone, so `action:'publish'` and `action:'replace', card_id:'anything'` produced the
+  // SAME digest. Confirming a replace while echoing a plain publish preview's digest passed the
+  // check and posted to /cards/:id/replace, which supersedes that card and removes it from the
+  // index and the match artifacts. A principal's approval of "publish this text" became
+  // "publish this text and take that card down", which they never saw.
+  const card = { headline: "Looking for a cofounder", seeking: ["someone who has shipped"], purposes: ["cofound"] };
+  const publishPreview = await callTool("publish_intent", { action: "publish", ...card });
+  assert.equal(publishPreview.out.step, "preview");
+
+  const before = countTo("/api/v3/cards/card-victim/replace");
+  const crossed = await callTool("publish_intent", {
+    action: "replace", card_id: "card-victim", ...card,
+    confirm: true, approved_digest: publishPreview.out.approved_digest,
+  });
+  assert.equal(crossed.isError, true, JSON.stringify(crossed.out));
+  assert.equal(crossed.out.step, "changed");
+  assert.equal(countTo("/api/v3/cards/card-victim/replace"), before, "and nothing was superseded");
+
+  // The same content under two different card_ids also gives two different digests.
+  const one = await callTool("publish_intent", { action: "replace", card_id: "card-a", ...card });
+  const two = await callTool("publish_intent", { action: "replace", card_id: "card-b", ...card });
+  assert.notEqual(one.out.approved_digest, two.out.approved_digest, "the target is bound, not only the words");
+  assert.notEqual(one.out.approved_digest, publishPreview.out.approved_digest, "and so is the action");
+});
+
+test("CARD APPROVAL: taking a card down and renewing one each bind their card", async () => {
+  const downA = await callTool("manage_intent", { action: "take_card_down", card_id: "card-a" });
+  const downB = await callTool("manage_intent", { action: "take_card_down", card_id: "card-b" });
+  assert.match(downA.out.approved_digest, /^[0-9a-f]{64}$/);
+  assert.notEqual(downA.out.approved_digest, downB.out.approved_digest);
+
+  const before = countTo("/api/v3/cards/card-b/withdraw");
+  const crossed = await callTool("manage_intent", {
+    action: "take_card_down", card_id: "card-b", confirm: true, approved_digest: downA.out.approved_digest,
+  });
+  assert.equal(crossed.isError, true, JSON.stringify(crossed.out));
+  assert.equal(countTo("/api/v3/cards/card-b/withdraw"), before, "card-b was not taken down");
+});
+
+test("CHANGED: the response carries back what the caller needs to try again", async () => {
+  // THE DEFECT THIS CLOSES. The changed branch withheld request_id and salt, so a re-confirm
+  // minted a fresh one, which changed the payload, which changed the digest, so it answered
+  // changed again with a different digest, forever. Verified before the fix: three attempts,
+  // three digests, zero writes, while the note said "ask again".
+  const args = { to_card_id: "card-them", from_card_id: "card-me", purpose: "collaborate" as const, note: "The first note." };
+  const preview = await callTool("request_intro", args);
+  assert.ok(preview.out.request_id);
+
+  // The note changes after the preview, which is exactly what the echo is for.
+  const changed = await callTool("request_intro", {
+    ...args, note: "A different note.", request_id: preview.out.request_id,
+    confirm: true, approved_digest: preview.out.approved_digest,
+  });
+  assert.equal(changed.out.step, "changed");
+  assert.equal(changed.out.request_id, preview.out.request_id, "the request id comes back");
+
+  // And the digest it handed back is reproducible: one more call with the fields it disclosed
+  // goes through, rather than answering changed again with a new digest.
+  const before = countTo("/api/v3/intros/request");
+  const sent = await callTool("request_intro", {
+    ...args, note: "A different note.", request_id: changed.out.request_id,
+    confirm: true, approved_digest: changed.out.approved_digest,
+  });
+  assert.equal(sent.out.requested, true, JSON.stringify(sent.out));
+  assert.equal(countTo("/api/v3/intros/request"), before + 1);
+});
+
+test("CHANGED: share_contact re-discloses the salt, so the second attempt can reproduce the digest", async () => {
+  const first = await callTool("continue_connection", { intro_id: "intro-1", action: "share_contact", contact: "me@example.com" });
+  const changed = await callTool("continue_connection", {
+    intro_id: "intro-1", action: "share_contact", contact: "other@example.com",
+    salt: first.out.salt, confirm: true, approved_digest: first.out.approved_digest,
+  });
+  assert.equal(changed.out.step, "changed");
+  assert.equal(changed.out.salt, first.out.salt, "the salt comes back");
+  assert.equal(changed.out.private_value_shown_to_the_principal, "other@example.com");
+
+  const before = countTo("/api/v3/intros/share-contact");
+  const sent = await callTool("continue_connection", {
+    intro_id: "intro-1", action: "share_contact", contact: "other@example.com",
+    salt: changed.out.salt, confirm: true, approved_digest: changed.out.approved_digest,
+  });
+  assert.equal(sent.out.shared, true, JSON.stringify(sent.out));
+  assert.equal(countTo("/api/v3/intros/share-contact"), before + 1);
+});
+
+test("SETTINGS: the echo binds WHICH WAY background checking is being set", async () => {
+  // The defect this closes: confirm carried no digest, so a preview that asked the principal
+  // about turning background checking OFF could be confirmed as turning it ON. This is the one
+  // setting the product promises is off until the person says yes.
+  const offPreview = await callTool("mingle_settings", { action: "background_checks", enabled: false });
+  const crossed = await callTool("mingle_settings", {
+    action: "background_checks", enabled: true, confirm: true, approved_digest: offPreview.out.approved_digest,
+  });
+  assert.equal(crossed.isError, true, JSON.stringify(crossed.out));
+  assert.equal(crossed.out.step, "changed");
+  const show = await callTool("mingle_settings", { action: "show" });
+  assert.equal(show.out.background_checks, "off", "and nothing was turned on");
+});
+
+test("SETTINGS: stop_email previews, and a bare confirm is refused", async () => {
+  // stop_email had NO preview at all: one call deleted the stored address. Recovering one means
+  // subscribing again and clicking a new confirmation link, so an unasked stop has a real cost.
+  let unsubscribes = countTo("/api/v3/notifications/unsubscribe");
+  const bare = await callTool("mingle_settings", { action: "stop_email", confirm: true });
+  assert.equal(bare.isError, true, JSON.stringify(bare.out));
+  assert.equal(countTo("/api/v3/notifications/unsubscribe"), unsubscribes, "and nothing was sent");
+
+  const pv = await callTool("mingle_settings", { action: "stop_email" });
+  assert.equal(pv.out.step, "preview");
+  assert.match(pv.out.review, /click a new confirmation link/, "the cost is stated before they approve");
+  routes.set("POST /api/v3/notifications/unsubscribe", () => ({ body: { unsubscribed: true } }));
+  const done = await callTool("mingle_settings", {
+    action: "stop_email", confirm: true, approved_digest: pv.out.approved_digest,
+  });
+  assert.equal(done.out.email_stopped, true, JSON.stringify(done.out));
+  assert.equal(countTo("/api/v3/notifications/unsubscribe"), unsubscribes + 1);
 });

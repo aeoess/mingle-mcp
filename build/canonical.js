@@ -94,6 +94,8 @@ function isPlainObject(v) {
     const proto = Object.getPrototypeOf(v);
     return proto === Object.prototype || proto === null;
 }
+/** The server's own resource id rule, write-envelope.ts:166, copied rather than approximated. */
+const RESOURCE_ID_RE = /^[A-Za-z0-9_.:@+-]{1,200}$/;
 const LONE_SURROGATE = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/;
 /** The server's payload gate, run before the preview. Every refusal here is a refusal
  *  the server would also make, with the same code, so a caller sees one answer rather
@@ -141,14 +143,22 @@ export function checkPayload(value, path = "payload", depth = 0) {
 function checkString(text, path, kind = "value") {
     for (const ch of text) {
         const code = ch.codePointAt(0);
-        if (code < 0x20 || code === 0x7f) {
+        // C0 AND C1. The C1 range 0x80 to 0x9f was missing, so a note carrying U+0085, or the
+        // cp1252 mojibake U+0092 that a pasted curly quote turns into, previewed cleanly, was
+        // approved, was signed, and was then refused by the server as control_character. That is
+        // the exact failure invariant 2 of this module forbids: the principal must never be shown
+        // a preview of bytes that cannot be sent. The server's rule is
+        // /[\u0000-\u001f\u007f-\u009f]/ at canonical-write.ts:111 and this now matches it.
+        if (code < 0x20 || (code >= 0x7f && code <= 0x9f)) {
             throw new CanonicalError("control_character", `${path} contains a control character, which a signed ${kind} may not carry`);
         }
     }
     if (LONE_SURROGATE.test(text)) {
         throw new CanonicalError("malformed_unicode", `${path} contains an unpaired surrogate`);
     }
-    if (kind === "value" && text !== text.trim()) {
+    // KEYS TOO, not values only. The server applies all three string rules to keys
+    // unconditionally, so a key with edge whitespace previewed here and was refused there.
+    if (text !== text.trim()) {
         throw new CanonicalError("edge_whitespace", `${path} has leading or trailing whitespace. Trim it before the principal approves it, because the server refuses rather than repairs.`);
     }
 }
@@ -186,6 +196,12 @@ export function privateValueCommitment(operation, resource, salt, value) {
 }
 export function buildEnvelope(args) {
     checkPayload(args.payload);
+    // The resource id, by the server's own rule at write-envelope.ts:166. Checked here rather
+    // than left to the server, for the same reason as every other local gate: an id the server
+    // will refuse must not reach a preview the principal approves.
+    if (!RESOURCE_ID_RE.test(args.resourceId)) {
+        throw new CanonicalError("malformed_resource_id", `resource.id must be 1 to 200 characters from A-Z a-z 0-9 _ . : @ + and -, and "${args.resourceId}" is not`);
+    }
     const resource = { type: OPERATION_RESOURCE_TYPE[args.operation], id: args.resourceId };
     const payloadDigest = sha256Hex(jcs({
         domain: PAYLOAD_DOMAIN, operation: args.operation, resource, payload: args.payload,
@@ -225,8 +241,9 @@ export function signedWrite(args) {
     return { body, built };
 }
 // ── What the server can answer, and what it means for the user ────────────
-/** The approved user text for the 426. It is the server's own string, repeated here so
- *  the client shows the same sentence whether it read the body or fell back. */
+/** The approved user text for the 426. It is the server's own string, repeated here because
+ *  it is what the principal is shown for any 426 whose body did not identify itself as
+ *  Mingle's own refusal, and the fallback when Mingle's refusal carried no text. */
 export const UPGRADE_REQUIRED_TEXT = "Update Mingle to continue this connection.";
 /** Read the capability field from the root index.
  *
@@ -253,11 +270,20 @@ export function interpretWrite(status, body) {
     const code = typeof body?.code === "string" ? body.code : null;
     const error = typeof body?.error === "string" ? body.error : null;
     const upgrade = status === 426 || code === "client_upgrade_required";
+    // ON AN UPGRADE THE APPROVED SENTENCE WINS, and the body's text is used only when the body
+    // identified itself as Mingle's own refusal by carrying the code.
+    //
+    // A 426 is a status anything on the path can return: a WAF, a captive portal, a proxy doing
+    // upgrade signalling. Preferring `body.error` on any 426 meant such a body could put
+    // arbitrary text in front of the principal with Mingle's authority behind it, next to this
+    // client's own reassurance that nothing was recorded. Demonstrated before the fix with a 426
+    // carrying a shell command as its error string.
+    const upgradeText = code === "client_upgrade_required" ? (error ?? UPGRADE_REQUIRED_TEXT) : UPGRADE_REQUIRED_TEXT;
     return {
         ok: status >= 200 && status < 300,
         status,
         code,
-        error: upgrade ? (error ?? UPGRADE_REQUIRED_TEXT) : error,
+        error: upgrade ? upgradeText : error,
         write_ref: typeof body?.write_ref === "string" ? body.write_ref : null,
         idempotent: body?.idempotent === true,
         body,

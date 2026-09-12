@@ -64,9 +64,15 @@ async function fetchDigest() {
 function withDigest(resultObj, digest) {
     return JSON.stringify({ ...resultObj, _digest: digest }, null, 2);
 }
-async function api(path, opts) {
+/** Every call is BOUNDED. An MCP tool that never returns is worse than one that fails: the
+ *  host model waits, the person waits, and nothing says why. A server that accepts the
+ *  connection and then never answers used to hang a tool call indefinitely, because fetch has
+ *  no default timeout. 30 seconds is generous for every call this client makes. */
+const API_TIMEOUT_MS = 30_000;
+async function api(path, opts, timeoutMs = API_TIMEOUT_MS) {
     const res = await fetch(`${API}${path}`, {
         ...opts,
+        signal: AbortSignal.timeout(timeoutMs),
         headers: {
             "Content-Type": "application/json",
             "X-Agent-Id": agentId,
@@ -100,25 +106,23 @@ const server = new McpServer({
 // about what it is.
 const LEGACY_TOOLS_ENABLED = process.env.MINGLE_LEGACY_TOOLS === "1";
 const CANONICAL_NAMES = new Set(CANONICAL_TOOL_NAMES);
-const registeredToolNames = [];
 let registeringCanonical = false;
 const registerRawTool = server.tool.bind(server);
 server.tool = (name, ...rest) => {
-    if (registeringCanonical) {
-        registeredToolNames.push(name);
+    if (registeringCanonical)
         return registerRawTool(name, ...rest);
-    }
     if (!LEGACY_TOOLS_ENABLED)
         return undefined;
-    const finalName = CANONICAL_NAMES.has(name) ? `${name}_legacy` : name;
-    registeredToolNames.push(finalName);
-    return registerRawTool(finalName, ...rest);
+    // The two names the product surface now owns get an explicit suffix rather than shadowing
+    // it. Everything else keeps its published name.
+    return registerRawTool(CANONICAL_NAMES.has(name) ? `${name}_legacy` : name, ...rest);
 };
-/** Every tool name this process registered, in registration order. Exported for the test
- *  that holds the default surface to exactly eight. */
-export function listRegisteredTools() {
-    return [...registeredToolNames];
-}
+// NO LIST OF REGISTERED NAMES IS KEPT. There was one, with an exported reader, and nothing
+// imported it: this module calls server.connect at module scope, so a test cannot import it,
+// and the test that holds the default surface to eight spawns the real server over stdio and
+// asks it, which is what a host does. The list also pushed a name BEFORE the registration
+// that could throw, so a failed registration left a phantom entry in the one place that
+// claimed to say what was registered.
 // ══════════════════════════════════════
 // Tool 1: publish_intent_card
 // ══════════════════════════════════════
@@ -1763,6 +1767,10 @@ server.tool("approve_first_step", "Approve the shared First Step plan (both halv
 async function apiRaw(path, opts) {
     const res = await fetch(`${API}${path}`, {
         ...opts,
+        // Bounded, for the same reason api() is. A canonical write that hangs leaves the principal
+        // with no answer about whether their act was recorded, which is the one thing this client
+        // is careful to be able to say.
+        signal: AbortSignal.timeout(API_TIMEOUT_MS),
         headers: {
             "Content-Type": "application/json",
             "X-Agent-Id": agentId,

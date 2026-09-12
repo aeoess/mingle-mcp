@@ -24,13 +24,14 @@
 // anything normalized after the preview would be a refusal with the principal having
 // approved something else.
 
+import { createHash } from "node:crypto";
 import { z } from "zod";
 import * as canon from "./canonical.js";
 
 /** What the tools need from the host module. Passed in rather than imported, so this
  *  module holds no global state and a test can drive it with a fake transport. */
 export interface ToolContext {
-  api: (path: string, opts?: RequestInit) => Promise<any>;
+  api: (path: string, opts?: RequestInit, timeoutMs?: number) => Promise<any>;
   /** A raw call that keeps the status, which every canonical write needs. */
   apiRaw: (path: string, opts?: RequestInit) => Promise<{ status: number; body: any }>;
   keys: { publicKey: string; privateKey: string };
@@ -116,12 +117,23 @@ async function canonicalAct(ctx: ToolContext, a: ActArgs): Promise<any> {
     }, true);
   }
   if (a.approvedDigest !== built.payloadDigest) {
+    // THE ROUND-TRIP FIELDS COME BACK, which is what makes this recoverable.
+    //
+    // Without them this branch handed the caller a digest it could not reproduce: a re-confirm
+    // minted a fresh request_id or a fresh salt, which changed the payload, which changed the
+    // digest, so it answered `changed` again with a different digest, forever. Verified before
+    // the fix: three attempts, three different digests, zero writes. The note said "ask again"
+    // and the response withheld the one value that would let the caller do so.
     return ctx.asText({
       step: "changed",
       operation: a.operation,
       approve_this_exactly: a.payload,
+      ...(a.previewExtra ?? {}),
       approved_digest: built.payloadDigest,
-      note: "The content changed after the preview, so nothing was signed. Show the principal this new version and ask again.",
+      ...(a.privateValue
+        ? { private_value_shown_to_the_principal: a.privateValue.value, salt: a.privateValue.salt }
+        : {}),
+      note: `The content changed after the preview, so nothing was signed. Show the principal this new version, and if they approve it, call again with confirm:true and approved_digest="${built.payloadDigest}", passing back every field shown here.`,
     }, true);
   }
 
@@ -167,6 +179,25 @@ const CONFIRM = {
 };
 
 const PURPOSES = ["cofound", "team_up", "collaborate", "meet", "advise", "work"] as const;
+
+/** The approval digest for a card action, which must bind the ACTION and the TARGET and not
+ *  only the words.
+ *
+ *  THE DEFECT THIS CLOSES. The digest was `sha256(jcs(card))` over the four content fields
+ *  alone, so the preview for `publish` and the preview for `replace` of any card_id produced
+ *  the SAME digest. Confirming `action:'replace', card_id:'someone-elses-live-card'` while
+ *  echoing a plain `publish` preview's digest passed the check and superseded that card. A
+ *  principal's approval of "publish this text" became "publish this text and take that card
+ *  down", which they never saw. Demonstrated before the fix: two previews, one digest.
+ *
+ *  Domain separated the same way the envelope is, so this digest can never collide with a
+ *  payload digest either. `card_id` is present as null for a publish rather than omitted,
+ *  because an absent member and a null member must not canonicalize alike. */
+const CARD_APPROVAL_DOMAIN = "mingle-card-approval-v1";
+
+function cardApprovalDigest(action: string, cardId: string | null, card: Record<string, unknown>): string {
+  return canon.sha256Hex(canon.jcs({ domain: CARD_APPROVAL_DOMAIN, action, card_id: cardId ?? null, card }));
+}
 
 /** The four states nothing further happens on, as the server defines them at
  *  connection-state.ts:268. Listed rather than inferred, because "the pending list is
@@ -233,13 +264,24 @@ export function registerCanonicalTools(server: any, ctx: ToolContext): void {
           if (fetched.revocation_status !== "active") {
             return ctx.asText({ refused: true, error: `only an active card can be renewed, and this one is ${fetched.revocation_status}` }, true);
           }
+          // The echo binds the ACTION and the CARD even though the words do not change, because
+          // "renew this card" and "renew that card" are different acts and a confirm that
+          // carried no digest could be pointed at either.
+          const renewDigest = cardApprovalDigest("renew", a.card_id, { headline: fetched.card.headline ?? "" });
           if (!a.confirm) {
             return ctx.asText({
               step: "preview", action: "renew", card_id: a.card_id,
               headline: fetched.card.headline ?? "",
+              approved_digest: renewDigest,
               review: "This renews the card for another 21 days. Not one word of it changes, so there is nothing new to approve in it.",
-              note: "Call again with confirm:true once your person approves.",
+              note: `Call again with confirm:true and approved_digest="${renewDigest}" once your person approves.`,
             });
+          }
+          if (a.approved_digest !== renewDigest) {
+            return ctx.asText({
+              step: "changed", action: "renew", card_id: a.card_id, approved_digest: renewDigest,
+              note: "That digest does not match a renewal of this card, so nothing was renewed. Call again without confirm and show your person what this renews.",
+            }, true);
           }
           const r = await ctx.api(`/api/v3/cards/${encodeURIComponent(a.card_id)}/renew`, {
             method: "POST", body: JSON.stringify({ card: await resealForRenew(ctx, fetched.card) }),
@@ -261,7 +303,7 @@ export function registerCanonicalTools(server: any, ctx: ToolContext): void {
           offering: (a.offering ?? []).map((s: string) => trimmed(s, "offering")),
           intents: a.purposes ?? [],
         };
-        const digest = canon.sha256Hex(canon.jcs(card));
+        const digest = cardApprovalDigest(replacing ? "replace" : "publish", replacing ? a.card_id : null, card);
         if (!a.confirm) {
           return ctx.asText({
             step: "preview", action: replacing ? "replace" : "publish", approve_this_exactly: card, approved_digest: digest,
@@ -530,6 +572,30 @@ export function registerCanonicalTools(server: any, ctx: ToolContext): void {
         if (!cur.shared_digest) {
           return ctx.asText({ waiting: true, note: "Both sides have to propose a half before either can approve. Waiting on the other half." });
         }
+        // THE SERVER'S DIGEST IS RECOMPUTED FROM THE HALVES IT SENT, and a mismatch is refused
+        // before the principal is shown anything.
+        //
+        // THE DEFECT THIS CLOSES. The client used to take `shared_digest` on trust and sign it
+        // while displaying `half_a` and `half_b` beside it. A server could return two halves
+        // and a digest of something else entirely, and the principal would approve the plan they
+        // read while their key signed a digest with no relation to it. Demonstrated before the
+        // fix: halves hashing to 47521065... were displayed next to a digest of all a's, and the
+        // client signed the all-a's digest and reported success.
+        //
+        // The recomputation is the server's own: sha256 over agent-passport-system
+        // canonicalization of {a, b}, per fit-firststep-db.ts:90. Deliberately NOT RFC 8785,
+        // because the value being reproduced is the server's and the server computes it that way.
+        const aps = await import("agent-passport-system");
+        const recomputed = createHash("sha256")
+          .update(aps.canonicalize({ a: cur.half_a, b: cur.half_b }), "utf8").digest("hex");
+        if (recomputed !== cur.shared_digest) {
+          return ctx.asText({
+            refused: true, code: "plan_digest_mismatch",
+            error: "The server's digest for this plan does not match the two halves it sent, so there is nothing safe to approve.",
+            note: "Nothing was signed. This is a server side disagreement and not something your person can fix by approving again.",
+            server_said: cur.shared_digest, halves_hash_to: recomputed,
+          }, true);
+        }
         if (!a.confirm) {
           return ctx.asText({
             step: "preview", plan_half_a: cur.half_a, plan_half_b: cur.half_b,
@@ -538,11 +604,9 @@ export function registerCanonicalTools(server: any, ctx: ToolContext): void {
             note: `Call again with confirm:true and approved_digest="${cur.shared_digest}" only if your person approves this exact plan.`,
           });
         }
-        // THE ECHO IS THE SHARED DIGEST ITSELF. For every other write the principal approves
-        // the payload, so the echo is the payload digest. Here the payload IS an approval of a
-        // digest the SERVER holds, so what the principal approved is that digest, and checking
-        // it is checking the right value. If the other side edited their half in between, the
-        // server's digest moved and this refuses.
+        // The echo is the shared digest, which by here has been reproduced from the halves the
+        // principal read. If the other side edited their half in between, the digest moved and
+        // this refuses.
         if (a.approved_digest !== cur.shared_digest) {
           return ctx.asText({
             step: "changed", plan_half_a: cur.half_a, plan_half_b: cur.half_b,
@@ -581,12 +645,22 @@ export function registerCanonicalTools(server: any, ctx: ToolContext): void {
       try {
         if (a.action === "take_card_down") {
           if (!a.card_id) return ctx.asText({ refused: true, error: "take_card_down needs card_id." }, true);
+          // The echo names the card. Taking a card down is terminal, and a confirm carrying no
+          // digest could be pointed at a card the principal never saw named.
+          const downDigest = cardApprovalDigest("take_card_down", a.card_id, {});
           if (!a.confirm) {
             return ctx.asText({
               step: "preview", action: a.action, card_id: a.card_id,
+              approved_digest: downDigest,
               review: "This takes the card down. It stops appearing in searches and matches. Introductions already under way are not affected.",
-              note: "Call again with confirm:true once your person approves.",
+              note: `Call again with confirm:true and approved_digest="${downDigest}" once your person approves.`,
             });
+          }
+          if (a.approved_digest !== downDigest) {
+            return ctx.asText({
+              step: "changed", action: a.action, card_id: a.card_id, approved_digest: downDigest,
+              note: "That digest does not match taking this card down, so nothing was taken down. Call again without confirm and show your person which card this is.",
+            }, true);
           }
           // The card verb preimage is `${verb}:${cardId}` and carries NO nonce, which is the
           // contract at v3-routes.ts:330. The verb is idempotent and its effect is a single
@@ -649,14 +723,25 @@ export function registerCanonicalTools(server: any, ctx: ToolContext): void {
         if (a.action === "background_checks") {
           if (typeof a.enabled !== "boolean") return ctx.asText({ refused: true, error: "background_checks needs enabled:true or enabled:false." }, true);
           const bg = await import("./v3.js");
+          // The echo binds WHICH WAY it is being set. A confirm carrying no digest could turn
+          // background checking ON off the back of a preview that asked about turning it off,
+          // and this is the one setting the product promises is off until the person says yes.
+          const bgDigest = cardApprovalDigest("background_checks", null, { enabled: a.enabled });
           if (!a.confirm) {
             return ctx.asText({
               step: "preview", action: a.action, enabled: a.enabled,
+              approved_digest: bgDigest,
               review: a.enabled
                 ? "This lets your person's agent check Mingle in the background and mention anything waiting. Ask them directly before turning it on."
                 : "This stops background checking. Your person can still ask about Mingle any time.",
-              note: "Call again with confirm:true once they have answered.",
+              note: `Call again with confirm:true and approved_digest="${bgDigest}" once they have answered.`,
             });
+          }
+          if (a.approved_digest !== bgDigest) {
+            return ctx.asText({
+              step: "changed", action: a.action, enabled: a.enabled, approved_digest: bgDigest,
+              note: `That digest does not match setting background checking to ${a.enabled}, so nothing changed. Ask your person again about this exact setting.`,
+            }, true);
           }
           const state = bg.setBackgroundChecks(a.enabled);
           return ctx.asText({ background_checks: a.enabled ? "on" : "off", state });
@@ -665,6 +750,25 @@ export function registerCanonicalTools(server: any, ctx: ToolContext): void {
         // not `public_key`: that is the name the intro and card surfaces use, and sending it
         // here reaches a route that reads subject_key and refuses for want of a signature.
         if (a.action === "stop_email") {
+          // THIS HAD NO PREVIEW. One call deleted the stored address, which is a write, and
+          // the product rule is that nothing a person would want to be asked about happens on
+          // one call. Recovering a deleted address means subscribing again and clicking a new
+          // confirmation link, so the cost of an unasked stop_email is real.
+          const stopDigest = cardApprovalDigest("stop_email", null, {});
+          if (!a.confirm) {
+            return ctx.asText({
+              step: "preview", action: "stop_email",
+              approved_digest: stopDigest,
+              review: "This deletes the address Mingle has for your person and stops every notification. To turn email back on later they have to add an address again and click a new confirmation link.",
+              note: `Call again with confirm:true and approved_digest="${stopDigest}" once your person approves.`,
+            });
+          }
+          if (a.approved_digest !== stopDigest) {
+            return ctx.asText({
+              step: "changed", action: "stop_email", approved_digest: stopDigest,
+              note: "That digest does not match stopping email, so nothing changed.",
+            }, true);
+          }
           const nonce = ctx.legacyNonce();
           const r = await ctx.api("/api/v3/notifications/unsubscribe", {
             method: "POST",
@@ -675,12 +779,22 @@ export function registerCanonicalTools(server: any, ctx: ToolContext): void {
         }
         if (!a.email) return ctx.asText({ refused: true, error: "set_email needs email." }, true);
         const email = trimmed(a.email, "email");
+        // The echo binds the ADDRESS. Without it a confirm could send a different address from
+        // the one the principal read, and an address is where Mingle's mail goes.
+        const emailDigest = cardApprovalDigest("set_email", null, { email });
         if (!a.confirm) {
           return ctx.asText({
             step: "preview", action: "set_email", email,
+            approved_digest: emailDigest,
             review: `Mingle will email ${email} when something needs your person. Email is for notifications and recovery, not identity. They confirm the address from the email itself.`,
-            note: "Call again with confirm:true once your person approves this address.",
+            note: `Call again with confirm:true and approved_digest="${emailDigest}" once your person approves this address.`,
           });
+        }
+        if (a.approved_digest !== emailDigest) {
+          return ctx.asText({
+            step: "changed", action: "set_email", email, approved_digest: emailDigest,
+            note: "The address changed after the preview, so nothing was sent. Show your person this address and ask again.",
+          }, true);
         }
         const nonce = ctx.legacyNonce();
         const r = await ctx.api("/api/v3/notifications/subscribe", {
@@ -776,10 +890,19 @@ async function resealForRenew(ctx: ToolContext, existing: Record<string, any>): 
  *  field, leaves the inbox working and says nothing about it. */
 async function serverNote(ctx: ToolContext): Promise<Record<string, unknown>> {
   try {
-    const cap = canon.readCapability(await ctx.api("/"));
-    if (cap.domain === null) {
-      return { server: { canonical_writes: "not supported by this server", update_needed: false } };
-    }
+    // TWO SECONDS, and this is the whole reason the timeout is a parameter.
+    //
+    // This is an ADVISORY note on a read. The inbox's own answer does not depend on it. A
+    // server that accepted the connection and never answered `/` used to hang the entire
+    // mingle_inbox call: the try/catch here catches a server that answers badly and cannot
+    // catch one that never answers at all. Verified before the fix by a fake API that served
+    // /mine normally and left / open, which hung the tool past 30 seconds.
+    const cap = canon.readCapability(await ctx.api("/", undefined, 2000));
+    // THE CLOSED WINDOW IS REPORTED FIRST, whatever else the field looks like. Testing
+    // `domain === null` first meant a field carrying legacy_accepted false and no readable
+    // domain was reported as "not supported by this server, update_needed false", which is the
+    // opposite of what a closed window means for an older client. A server that says the window
+    // has closed has said the most important thing it can say.
     if (!cap.legacy_accepted) {
       return {
         server: {
@@ -788,6 +911,9 @@ async function serverNote(ctx: ToolContext): Promise<Record<string, unknown>> {
           note: "Older Mingle versions can no longer change a connection on this server. This version can.",
         },
       };
+    }
+    if (cap.domain === null) {
+      return { server: { canonical_writes: "not supported by this server", update_needed: false } };
     }
     return {
       server: {
@@ -814,8 +940,10 @@ function mapPendingAction(operation: string): Record<string, string> {
     withdraw_interest: "manage_intent with action:'withdraw_interest'",
     share_contact: "continue_connection with action:'share_contact'",
     withdraw_contact: "continue_connection with action:'withdraw_contact'",
-    first_step_propose: "continue_connection with action:'propose_plan'",
-    first_step_approve: "continue_connection with action:'approve_plan'",
+    // The two plan actions route to the v4 fit surface, which is off on the network, so they
+    // are reported the same way fit_request is rather than offered as if they would work.
+    first_step_propose: "not available while agent fit is off",
+    first_step_approve: "not available while agent fit is off",
     fit_request: "not available while agent fit is off",
   };
   return { operation, call: map[operation] ?? operation };

@@ -96,8 +96,9 @@ export declare function signedWrite(args: {
     body: WireBody;
     built: BuiltWrite;
 };
-/** The approved user text for the 426. It is the server's own string, repeated here so
- *  the client shows the same sentence whether it read the body or fell back. */
+/** The approved user text for the 426. It is the server's own string, repeated here because
+ *  it is what the principal is shown for any 426 whose body did not identify itself as
+ *  Mingle's own refusal, and the fallback when Mingle's refusal carried no text. */
 export declare const UPGRADE_REQUIRED_TEXT = "Update Mingle to continue this connection.";
 export interface WriteCapability {
     /** The envelope domain the server speaks, or null when the field is absent, which

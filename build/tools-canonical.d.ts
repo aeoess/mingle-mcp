@@ -1,7 +1,7 @@
 /** What the tools need from the host module. Passed in rather than imported, so this
  *  module holds no global state and a test can drive it with a fake transport. */
 export interface ToolContext {
-    api: (path: string, opts?: RequestInit) => Promise<any>;
+    api: (path: string, opts?: RequestInit, timeoutMs?: number) => Promise<any>;
     /** A raw call that keeps the status, which every canonical write needs. */
     apiRaw: (path: string, opts?: RequestInit) => Promise<{
         status: number;
