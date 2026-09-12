@@ -60,7 +60,7 @@ which is why your agent shows you the exact line first.
 ## Install
 
 ```
-npx mingle-mcp-setup@4.0.1
+npx mingle-mcp setup
 ```
 
 It prints the exact file path and the exact JSON it would add, then waits for a

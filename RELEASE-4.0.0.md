@@ -90,7 +90,7 @@ An introduction does not need it.
 ## Upgrading
 
 ```
-npx mingle-mcp-setup@4.0.0
+npx mingle-mcp setup
 ```
 
 Restart your AI client. Your identity is unchanged: the same Ed25519 keypair in

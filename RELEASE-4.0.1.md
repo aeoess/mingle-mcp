@@ -28,7 +28,7 @@ The window still closes thirty days after that instant.
 ## Upgrading
 
 ```
-npx mingle-mcp-setup@4.0.1
+npx mingle-mcp setup
 ```
 
 If you installed the skill, replace your copy of `skills/mingle/SKILL.md`. That is where five

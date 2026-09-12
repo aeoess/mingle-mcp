@@ -348,7 +348,7 @@ contact, is the whole path.
 
 One command:
 ```
-npx mingle-mcp-setup@4.0.1
+npx mingle-mcp setup
 ```
 `npx mingle-mcp@4.0.1 setup` does the same thing. Either auto-installs and configures
 Claude Desktop and Cursor. Restart your AI client.
