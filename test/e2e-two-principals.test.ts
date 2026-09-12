@@ -522,6 +522,42 @@ test("E2E: GRANDFATHERED LEGACY CLIENT, a 3.2.x body still works beside a canoni
   assert.equal(rootIndex.write_authorization.legacy_cutoff_at, null, "unstamped means open, never closed");
 });
 
+test("E2E: FEEDBACK has no surface at this revision, and no default tool pretends otherwise", skipIfNoApi, async () => {
+  // The program's flow ends with feedback recorded, and this revision cannot record any. The
+  // only feedback route is POST /api/feedback/:introId, which sits behind the v2 containment
+  // flag along with the rest of the legacy 48 hour product, and that flag stays off. There is
+  // no v3 feedback surface, so there is nothing for a tool to call.
+  //
+  // Asserted rather than skipped quietly, because the useful fact is not "feedback is missing"
+  // but "the containment is what makes it missing, and it answers with its approved sentence".
+  const res = await fetch(`${base}/api/feedback/${connectedIntroId}`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ rating: "useful", comment: "This one worked." }),
+  });
+  assert.equal(res.status, 503);
+  const body: any = await res.json();
+  assert.equal(body.code, "v2_disabled");
+  assert.equal(body.error, "This legacy Mingle interface is temporarily unavailable. Use the current Mingle tools.");
+
+  // And the root index advertises none of the contained surface, so it cannot be discovered.
+  const index: any = await (await fetch(`${base}/`)).json();
+  const advertised = JSON.stringify(index.endpoints ?? index);
+  assert.equal(advertised.includes("/api/feedback/"), false, "a contained route is not advertised");
+  assert.equal(advertised.includes("/api/trust/"), false);
+
+  // The fit surface is contained the same way, which is why the optional fit step in the main
+  // flow is skipped rather than stubbed.
+  const fit = await fetch(`${base}/api/v4/fit/${connectedIntroId}/request`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({}),
+  });
+  assert.equal(fit.status, 503, "agent fit is off, so its routes refuse rather than half work");
+
+  // No default tool offers either one. Eight tools, and this is the list.
+  const names = (await alice.client.listTools()).tools.map(t => t.name);
+  assert.equal(names.length, 8);
+  assert.equal(names.some(n => /feedback|rate|fit/.test(n)), false);
+});
+
 test("E2E: the server refuses an envelope this client did not sign", skipIfNoApi, async () => {
   // The property every signature rests on, checked from the outside: a body whose envelope
   // names one key and whose signature came from another is refused, so a proxy that rewrote
