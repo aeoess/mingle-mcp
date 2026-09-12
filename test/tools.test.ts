@@ -57,6 +57,11 @@ before(async () => {
   env.HOME = fakeHome;
   env.USERPROFILE = fakeHome;
   env.MINGLE_API_URL = `http://127.0.0.1:${port}`;
+  // THIS SUITE TESTS THE LEGACY AND PROTOCOL SURFACE, so it asks for it explicitly. The
+  // default surface is the eight product tools, and every tool this file drives now needs
+  // MINGLE_LEGACY_TOOLS. test/default-surface.test.ts is the file that holds the default
+  // to eight, and it never sets this.
+  env.MINGLE_LEGACY_TOOLS = "1";
 
   const transport = new StdioClientTransport({
     command: process.execPath,

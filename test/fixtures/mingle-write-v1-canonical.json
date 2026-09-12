@@ -1,0 +1,275 @@
+{
+  "note": "Shared canonical fixtures for mingle-write-v1. RFC 8785 via canonicalize@5.0.0. Generated, never hand edited. 2C copies this file into mingle-mcp unchanged and asserts the same bytes there.",
+  "serializer": "canonicalize@5.0.0",
+  "not_representable": [
+    {
+      "name": "undefined member",
+      "code": "null_in_payload",
+      "why": "JSON.stringify drops the member, so the file would carry {a:1} which is a valid payload"
+    },
+    {
+      "name": "NaN",
+      "code": "non_finite_number",
+      "why": "JSON.stringify emits null, so the file would carry {a:null} and the case would test null_in_payload instead"
+    },
+    {
+      "name": "Date or class instance",
+      "code": "unsupported_value",
+      "why": "a Date serializes to a string and a Map to {}, so neither survives as the value under test"
+    },
+    {
+      "name": "negative zero",
+      "expected": "0",
+      "why": "JSON.stringify writes -0 as 0, so the file cannot carry the input. RFC 8785 requires -0 to serialize as \"0\", and 2C must assert jcs({e: -0}) === '{\"e\":0}' in its own code"
+    },
+    {
+      "name": "an integer past 2^53",
+      "expected": "9007199254740992",
+      "why": "a JS number literal of 9007199254740993 IS 9007199254740992, so no file can carry it. 2C must assert that the rounded value is what serializes, in its own code"
+    }
+  ],
+  "accepted": [
+    {
+      "name": "flat keys out of order",
+      "input": {
+        "b": 2,
+        "a": 1,
+        "C": 3,
+        "c": 4
+      },
+      "canonical": "{\"C\":3,\"a\":1,\"b\":2,\"c\":4}",
+      "digest": "f0fb87afff07f563e06de60898d6d4d9a4487d82b4339d129560c35de6bbf382"
+    },
+    {
+      "name": "keys differing only in case",
+      "input": {
+        "ZEBRA": 3,
+        "Zebra": 1,
+        "zEBRA": 4,
+        "zebra": 2
+      },
+      "canonical": "{\"ZEBRA\":3,\"Zebra\":1,\"zEBRA\":4,\"zebra\":2}",
+      "digest": "12cb2b892b23a5c6b5ec3ca9029ddc935acb4c31bc4c7db929f62ed7503b05a6"
+    },
+    {
+      "name": "astral key sorts by UTF-16 code unit, below U+FFFF",
+      "input": {
+        "😀": 1,
+        "￿": 2,
+        "z": 3
+      },
+      "canonical": "{\"z\":3,\"😀\":1,\"￿\":2}",
+      "digest": "9901eca9ecff61ca2a3233c9f2c6668f067be684531911e6861f98f4c1ac265a"
+    },
+    {
+      "name": "surrogate pair key against an empty key",
+      "input": {
+        "": 1,
+        "𐀀": 2
+      },
+      "canonical": "{\"\":1,\"𐀀\":2}",
+      "digest": "f20de0667f8c9f7d5b2ac792bfbcdfc1a5d7294d9ce32481708aae9c03558b74"
+    },
+    {
+      "name": "unicode keys, e-acute and fullwidth Z",
+      "input": {
+        "é": 1,
+        "Z": 2,
+        "Ｚ": 3,
+        "a": 4
+      },
+      "canonical": "{\"Z\":2,\"a\":4,\"é\":1,\"Ｚ\":3}",
+      "digest": "395ced0d65f48609a8375e71fcbba0bc8b83cdf894724a59defd18ce449fbc01"
+    },
+    {
+      "name": "integers including past 2^53",
+      "input": {
+        "a": 0,
+        "b": -1,
+        "c": 2147483647,
+        "d": 9007199254740991,
+        "e": 9007199254740992
+      },
+      "canonical": "{\"a\":0,\"b\":-1,\"c\":2147483647,\"d\":9007199254740991,\"e\":9007199254740992}",
+      "digest": "6953a7cf7ba002aa341a1365edd7469b4153cbca31c6f4391937e94c37dbebb4"
+    },
+    {
+      "name": "decimals and exponents",
+      "input": {
+        "a": 0.1,
+        "b": 1e+21,
+        "c": 1e-7,
+        "d": 5e-324,
+        "e": 0
+      },
+      "canonical": "{\"a\":0.1,\"b\":1e+21,\"c\":1e-7,\"d\":5e-324,\"e\":0}",
+      "digest": "7ca76d3418f3021c3c787b5dd846a157e44b725a223afd397ebd6e999f772cfa"
+    },
+    {
+      "name": "string escapes, quote and backslash",
+      "input": {
+        "s": "q\"uote back\\slash"
+      },
+      "canonical": "{\"s\":\"q\\\"uote back\\\\slash\"}",
+      "digest": "ce5ca1af004e7448914ff00b23208a353aafe48836edb91fff2a69e4fe765526"
+    },
+    {
+      "name": "non BMP string",
+      "input": {
+        "s": "hi 😀 there"
+      },
+      "canonical": "{\"s\":\"hi 😀 there\"}",
+      "digest": "b4cb5a99bdfee6ff2bb50f0a179e33221cbaac3fe134c90aaaa74a01a918d5f3"
+    },
+    {
+      "name": "null inside an array is kept",
+      "input": {
+        "a": [
+          1,
+          null,
+          2
+        ]
+      },
+      "canonical": "{\"a\":[1,null,2]}",
+      "digest": "26bc150a8aceea6f585b351983c98e2460b12a2b1f60f4e0678a7148737d697a"
+    },
+    {
+      "name": "empty object and empty array",
+      "input": {
+        "o": {},
+        "a": []
+      },
+      "canonical": "{\"a\":[],\"o\":{}}",
+      "digest": "9bee7ebfc94b459dacb8cbc72cb2900e61f0aa42189df18329f84f92568f4f89"
+    },
+    {
+      "name": "deep nesting",
+      "input": {
+        "a": {
+          "b": {
+            "c": {
+              "d": [
+                1,
+                {
+                  "e": "f"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "canonical": "{\"a\":{\"b\":{\"c\":{\"d\":[1,{\"e\":\"f\"}]}}}}",
+      "digest": "aeabf451476b68732a8d9bfc85fb6fc8b79fc2393e3657c45ab45ebdb433e8cd"
+    },
+    {
+      "name": "mingle-write-v1 envelope",
+      "input": {
+        "domain": "mingle-write-v1",
+        "operation": "share_contact",
+        "actor_key": "f5f1af69700ebdc38840ae0b11b968df3238388209157c0d219363a3fb17defc",
+        "resource": {
+          "type": "intro",
+          "id": "intro-v3-1789108307772-0d8f18e6"
+        },
+        "issued_at": "2026-09-11T18:22:03.114Z",
+        "nonce": "E4Y2tDdV0dXaITfBiro2Gw",
+        "payload_digest": "49a17bc1629ece6c71cf12a27500ef244e82df1d9b8b565fbe728d8cdd31f2be"
+      },
+      "canonical": "{\"actor_key\":\"f5f1af69700ebdc38840ae0b11b968df3238388209157c0d219363a3fb17defc\",\"domain\":\"mingle-write-v1\",\"issued_at\":\"2026-09-11T18:22:03.114Z\",\"nonce\":\"E4Y2tDdV0dXaITfBiro2Gw\",\"operation\":\"share_contact\",\"payload_digest\":\"49a17bc1629ece6c71cf12a27500ef244e82df1d9b8b565fbe728d8cdd31f2be\",\"resource\":{\"id\":\"intro-v3-1789108307772-0d8f18e6\",\"type\":\"intro\"}}",
+      "digest": "6ae1f06582565d29c70a3f3d4f064050852f16c8ffe1bfb822f6085ff8b10829"
+    },
+    {
+      "name": "mingle-payload-v1 payload",
+      "input": {
+        "domain": "mingle-payload-v1",
+        "operation": "request_intro",
+        "resource": {
+          "type": "intro_request",
+          "id": "2e3235ae49f03d65216aca1a8f4c53ed"
+        },
+        "payload": {
+          "from_card": "v3-connection-1",
+          "to_card": "v3-connection-2",
+          "purpose": "collaborate",
+          "note": "compare notes"
+        }
+      },
+      "canonical": "{\"domain\":\"mingle-payload-v1\",\"operation\":\"request_intro\",\"payload\":{\"from_card\":\"v3-connection-1\",\"note\":\"compare notes\",\"purpose\":\"collaborate\",\"to_card\":\"v3-connection-2\"},\"resource\":{\"id\":\"2e3235ae49f03d65216aca1a8f4c53ed\",\"type\":\"intro_request\"}}",
+      "digest": "7875039140ed25493ed367a34c3b11fabec3436a8ed48bf38b6d37b2b7e0c34a"
+    },
+    {
+      "name": "mingle-private-value-v1 commitment input",
+      "input": {
+        "domain": "mingle-private-value-v1",
+        "operation": "share_contact",
+        "resource": {
+          "type": "intro",
+          "id": "intro-v3-1789108307772-0d8f18e6"
+        },
+        "salt": "Yk9sQjNwVnhLMmRHN3FUc1ozTmZBaFd1RTVtQ3hSNHk",
+        "value": "alice@example.com"
+      },
+      "canonical": "{\"domain\":\"mingle-private-value-v1\",\"operation\":\"share_contact\",\"resource\":{\"id\":\"intro-v3-1789108307772-0d8f18e6\",\"type\":\"intro\"},\"salt\":\"Yk9sQjNwVnhLMmRHN3FUc1ozTmZBaFd1RTVtQ3hSNHk\",\"value\":\"alice@example.com\"}",
+      "digest": "50d414b0188f137a68c32ab201b998faab1ef955692519341679ea5c10ed9469"
+    }
+  ],
+  "rejected": [
+    {
+      "name": "null member",
+      "input": {
+        "a": 1,
+        "b": null
+      },
+      "code": "null_in_payload"
+    },
+    {
+      "name": "nested null member",
+      "input": {
+        "p": {
+          "contact": "x",
+          "note": null
+        }
+      },
+      "code": "null_in_payload"
+    },
+    {
+      "name": "null in a deeper object",
+      "input": {
+        "a": {
+          "b": {
+            "c": null
+          }
+        }
+      },
+      "code": "null_in_payload"
+    },
+    {
+      "name": "control character in a string",
+      "input": {
+        "a": "x\u0000y"
+      },
+      "code": "control_character"
+    },
+    {
+      "name": "DEL in a string",
+      "input": {
+        "a": "x\u007fy"
+      },
+      "code": "control_character"
+    },
+    {
+      "name": "leading whitespace",
+      "input": {
+        "a": " x"
+      },
+      "code": "edge_whitespace"
+    },
+    {
+      "name": "lone surrogate",
+      "input": {
+        "a": "\ud800"
+      },
+      "code": "malformed_unicode"
+    }
+  ]
+}

@@ -1,9 +1,18 @@
 #!/usr/bin/env node
 // ══════════════════════════════════════════════════════════════
 // Mingle MCP — Your AI finds the right people for you.
-// 6 tools. One network. No app, no signup.
+// Eight product tools. One network. No app, no signup.
 // Powered by Agent Passport System (aeoess.com)
 // ══════════════════════════════════════════════════════════════
+// THE DEFAULT SURFACE IS EIGHT TOOLS, named for what a person is doing, with no version
+// suffix anywhere. They are registered in tools-canonical.ts and every write among them
+// carries a mingle-write-v1 envelope.
+//
+// Everything else in this file is the LEGACY AND PROTOCOL surface: the tools a published
+// 3.2.x client exposed, plus the fit and First Step protocol tools. They still work and
+// they register only when MINGLE_LEGACY_TOOLS is exactly "1". The gate is one wrapper
+// around server.tool below rather than a conditional around each registration, because a
+// conditional per registration is thirty-eight chances to get one wrong.
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
@@ -13,6 +22,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { loadIdentity, loadPreferences, cacheCard, clearCachedCard, classifyMatches, recordSurfaced } from "./identity.js";
 import { buildCard, cardContentHash, sealCard, explainVisibility, trackV3Card, listV3Cards, getLastCheck, setLastCheck, getBackgroundChecks, backgroundChecksAllowed, setBackgroundChecks, type BuildCardArgs } from "./v3.js";
 import { sanitize } from "./sanitize.js";
+import { CANONICAL_TOOL_NAMES, registerCanonicalTools } from "./tools-canonical.js";
 
 const SKILL_VERSION = "mingle-composer-v1";
 
@@ -79,6 +89,46 @@ const server = new McpServer({
   name: "mingle",
   version: "1.0.0",
 });
+
+// ══════════════════════════════════════════════════════════════
+// The registration gate
+// ══════════════════════════════════════════════════════════════
+// The default surface is the eight product tools and nothing else. Every other
+// registration in this file is legacy or protocol and needs MINGLE_LEGACY_TOOLS to be
+// exactly "1", which is the same shape as the server's own containment flags: any other
+// value, and unset, mean off.
+//
+// ONE WRAPPER RATHER THAN THIRTY-EIGHT CONDITIONALS. A conditional around each
+// registration is one chance per tool to get it wrong, and the failure mode is a tool
+// that is live when it should not be. This is a single decision applied to all of them.
+//
+// TWO NAMES COLLIDE. The published surface already has `request_intro` (the v2 tool) and
+// `respond_intro` (the v3 one), and the product surface now owns both names. With the
+// switch on, the legacy pair registers as `request_intro_legacy` and `respond_intro_legacy`
+// rather than shadowing the product tools. No DEFAULT name carries a suffix, which is what
+// the decision requires, and a suffix on a tool that only exists behind a switch is honest
+// about what it is.
+const LEGACY_TOOLS_ENABLED = process.env.MINGLE_LEGACY_TOOLS === "1";
+const CANONICAL_NAMES = new Set<string>(CANONICAL_TOOL_NAMES);
+const registeredToolNames: string[] = [];
+let registeringCanonical = false;
+const registerRawTool = server.tool.bind(server) as (...a: any[]) => any;
+(server as any).tool = (name: string, ...rest: any[]) => {
+  if (registeringCanonical) {
+    registeredToolNames.push(name);
+    return registerRawTool(name, ...rest);
+  }
+  if (!LEGACY_TOOLS_ENABLED) return undefined;
+  const finalName = CANONICAL_NAMES.has(name) ? `${name}_legacy` : name;
+  registeredToolNames.push(finalName);
+  return registerRawTool(finalName, ...rest);
+};
+
+/** Every tool name this process registered, in registration order. Exported for the test
+ *  that holds the default surface to exactly eight. */
+export function listRegisteredTools(): string[] {
+  return [...registeredToolNames];
+}
 
 // ══════════════════════════════════════
 // Tool 1: publish_intent_card
@@ -1869,6 +1919,37 @@ server.tool(
     } catch (e: any) { return asText(`Network error: ${e.message}`, true); }
   },
 );
+
+// ══════════════════════════════════════════════════════════════
+// The eight product tools
+// ══════════════════════════════════════════════════════════════
+// Registered last, because they use `api`, `asText` and the identity defined above, and
+// registered through the same gate with the canonical flag set so their names are never
+// suffixed. Order does not decide which surface wins: the gate renames a colliding legacy
+// tool whichever way round they register.
+
+async function apiRaw(path: string, opts?: RequestInit): Promise<{ status: number; body: any }> {
+  const res = await fetch(`${API}${path}`, {
+    ...opts,
+    headers: {
+      "Content-Type": "application/json",
+      "X-Agent-Id": agentId,
+      "X-Public-Key": keys.publicKey,
+      ...opts?.headers,
+    },
+  });
+  let body: any = null;
+  try { body = await res.json() } catch { body = null }
+  return { status: res.status, body };
+}
+
+registeringCanonical = true;
+registerCanonicalTools(server, {
+  api, apiRaw, keys, agentId, asText,
+  legacyNonce: newNonce,
+  sign,
+});
+registeringCanonical = false;
 
 // ══════════════════════════════════════
 // Start
