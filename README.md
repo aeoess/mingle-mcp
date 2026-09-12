@@ -14,14 +14,13 @@ of people; that last one is a protocol invariant with a conformance test.
 
 Site: https://aeoess.com/mingle · Join: https://api.aeoess.com/join
 
-## Mingle v3
+## Eight tools
 
-v3 adds ConnectionCards and OpportunityCards with exact-hash approval (you
-approve the precise bytes that publish), claim-specific evidence, per-field
-visibility, six revocation verbs, public card pages with link previews, event
-walls for hackathons (set an event_ref and your card appears on that event's
-public wall), and a join page at https://api.aeoess.com/join. The original 48h
-social cards keep working unchanged.
+The surface is eight tools named for what a person is doing. There is no version in any
+name and no protocol machinery in any of them.
+
+`publish_intent` · `find_people` · `mingle_inbox` · `request_intro` · `respond_intro` ·
+`continue_connection` · `manage_intent` · `mingle_settings`
 
 **Install as a skill:** the composition skill ships in `skills/mingle/`. Copy
 that folder into your agent's skills directory (or point your skills config at
@@ -32,11 +31,27 @@ Your AI networks for you. You just say yes. No app. No signup. No feed.
 
 ## What it does
 
-1. You tell your AI what you need
-2. Your agent publishes a signed card to the network
+1. You tell your AI who you want to meet
+2. Your agent shows you the exact card and publishes it only once you approve that exact text
 3. Semantic matching finds relevant people across the network
-4. Both humans approve before connecting
-5. Connected
+4. One of you asks for an introduction, the other says whether they are interested
+5. Contact is exchanged only when both of you choose to share, separately
+6. Connected
+
+## Nothing is signed until you approve the exact content
+
+Every change is two steps. The first returns the exact content and a digest over those exact
+bytes. Your agent shows you that content. The second carries the digest back, and if anything
+changed in between, nothing is signed and the new version comes back to show you instead.
+
+Your key signs the content itself rather than a description of it, so what was approved and
+what was recorded cannot differ.
+
+## Interest is not contact
+
+Saying you are interested in an introduction shares nothing but that. Contact is released only
+when both sides have chosen to share, and a line that has been released cannot be recalled,
+which is why your agent shows you the exact line first.
 
 <a href="https://glama.ai/mcp/servers/aeoess/mingle-mcp">
   <img width="380" height="200" src="https://glama.ai/mcp/servers/aeoess/mingle-mcp/badge" alt="mingle-mcp MCP server" />
@@ -45,7 +60,7 @@ Your AI networks for you. You just say yes. No app. No signup. No feed.
 ## Install
 
 ```
-npx mingle-mcp-setup@3.2.2
+npx mingle-mcp-setup@4.0.0
 ```
 
 It prints the exact file path and the exact JSON it would add, then waits for a
@@ -70,48 +85,64 @@ Restart your AI client.
 ```
 </details>
 
-## v2.0 Features
+## Features
 
-- **Semantic matching**: all-MiniLM-L6-v2 embeddings match your needs against others' offers (and vice versa). Mutual matches get a bonus.
-- **Persistent identity**: Ed25519 keypair stored in `~/.mingle/identity.json`. Same key across sessions, same reputation.
-- **Ghost mode**: browse the network without publishing a card. See who's out there before making yourself visible.
-- **Consent flow**: your AI drafts a card, shows you a preview, you approve before anything goes live. Never auto-publishes.
-- **Trust signals**: identity age, response rate, trust level (new → established → trusted → veteran) shown per match.
-- **Feedback loop**: rate connections after meeting. Improves matching quality over time.
+- **Semantic matching**: all-MiniLM-L6-v2 embeddings match what you are looking for against what other people say they offer, and the other way round.
+- **Persistent identity**: Ed25519 keypair stored in `~/.mingle/identity.json`. Same key across sessions.
+- **Browse before publishing**: `find_people` needs no card. See who is out there before making yourself visible.
+- **Exact-content approval**: your AI drafts a card, shows you the exact text, and publishes only what you approved. Never auto-publishes.
+- **Background checking is off** until you say yes, and your AI asks once, ever.
 - **Live network** at api.aeoess.com; the card count is whatever the API reports, not a number written here.
 
 ## Tools
 
 | Tool | What it does |
 |------|-------------|
-| `publish_intent_card` | What you need and what you offer. Returns top matches immediately. |
-| `search_matches` | Find relevant people. Works without a card (ghost mode). |
-| `check_pending_matches` | New matches since you last looked, without consuming the read marker. Says whether an intro or handshake already exists for the pair. Called silently at session start. |
-| `get_digest` | Pending intros + matches + card status. Advances the read marker, so it is called when you actually read. |
-| `request_intro` | Propose a connection to a match. |
-| `respond_to_intro` | Approve or decline an incoming intro. |
-| `remove_intent_card` | Pull your card when things change. |
-| `rate_connection` | Rate a connection after meeting. Improves matching. |
+| `publish_intent` | Publish your card, renew one that is expiring, or replace one with a new version. |
+| `find_people` | Search published cards. Works without a card of your own. Contacts nobody. |
+| `mingle_inbox` | What is waiting for you, and what you can do next on each. Changes nothing by reading. |
+| `request_intro` | Ask one person for an introduction, with a note in your own words. |
+| `respond_intro` | Answer an introduction: interested, not now, or not now and block. |
+| `continue_connection` | Share a contact line, take an unreleased one back, or agree a plan for the first conversation. |
+| `manage_intent` | Withdraw a request, step out of an introduction, block a pair, take a card down. |
+| `mingle_settings` | Where Mingle may email you, and whether your agent may check in the background. |
+
+Forty-six older tools, including the fit-exchange and fit-policy protocol machinery, are still
+in the package and register only when `MINGLE_LEGACY_TOOLS` is exactly `1`. They exist so an
+existing install keeps working. New installs want the eight.
 
 ## How matching works
 
-Cards are embedded using all-MiniLM-L6-v2 (384-dim vectors). Your needs are matched against others' offers, and your offers against others' needs. Bidirectional matches (mutual fit) get a 15% score bonus. Results ranked by cosine similarity.
+Cards are embedded using all-MiniLM-L6-v2 (384-dim vectors). What you are looking for is
+matched against what other people offer, and what you offer against what they are looking
+for. Results are ordered by cosine similarity. There is no score shown to anyone and no
+ranking of people. That is a protocol invariant with a conformance test.
 
-Every card is Ed25519 signed and expires automatically (48h default).
+Every card is Ed25519 signed and expires automatically, 21 days by default.
 
 ## Trust model
 
-- Every card is cryptographically signed
-- Every connection requires both humans to approve
-- Your agent shares only what you have allowed for that connection, dimension by
-  dimension under the fit policy you set. Publishing a card is not a blanket
-  permission: each dimension carries its own disclosure level, a handshake
-  evaluates only the dimensions both sides authorized, and an exact value leaves
-  only when you release it yourself
-- You can ask at any time what was shared and with whom: `get_fit_activity`, `get_fit_handshake`, `get_fit_record`
+- Every card is signed, and the signature covers the exact content you approved
+- Every connection requires both people to approve, separately
+- Saying you are interested shares nothing. Contact is released only when both of you have
+  chosen to share, and a released line cannot be recalled
+- You can ask at any time what state anything is in: `mingle_inbox` shows every introduction
+  and what you can do next, and reading it changes nothing
 - Cards expire automatically, and an expired card says `expired`, not
   `withdrawn` - the network never reports a lapse as a decision you made
 - Your AI handles networking, you handle decisions
+
+## Upgrading from 3.2.x
+
+The default tool surface is now eight tools instead of forty-six, which is why this is a major
+version. If you scripted any of the old names, set `MINGLE_LEGACY_TOOLS=1` to get them back,
+and note that `request_intro` and `respond_intro` keep the plain names for the new tools, so
+the older pair is `request_intro_legacy` and `respond_intro_legacy`.
+
+Published 3.2.x installs keep working against the network for thirty days after this release,
+after which changing a connection needs this version. When that happens your assistant is told
+once, in one sentence, rather than left with an error: "Update Mingle to continue this
+connection."
 
 ## Links
 

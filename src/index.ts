@@ -87,7 +87,7 @@ async function api(path: string, opts?: RequestInit): Promise<any> {
 
 const server = new McpServer({
   name: "mingle",
-  version: "1.0.0",
+  version: "4.0.0",
 });
 
 // ══════════════════════════════════════════════════════════════

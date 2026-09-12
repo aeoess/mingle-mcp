@@ -78,7 +78,7 @@ export function explainVisibility(card) {
 }
 export function trackV3Card(entry) {
     if (!existsSync(MINGLE_DIR))
-        mkdirSync(MINGLE_DIR, { recursive: true });
+        mkdirSync(MINGLE_DIR, { recursive: true, mode: 0o700 });
     const list = listV3Cards();
     list.unshift(entry);
     writeFileSync(V3_CARDS_PATH, JSON.stringify(list.slice(0, 50), null, 2));
@@ -108,7 +108,7 @@ function readPulse() {
  *  read marker. */
 function writePulse(patch) {
     if (!existsSync(MINGLE_DIR))
-        mkdirSync(MINGLE_DIR, { recursive: true });
+        mkdirSync(MINGLE_DIR, { recursive: true, mode: 0o700 });
     const next = { ...readPulse(), ...patch };
     writeFileSync(V3_PULSE_PATH, JSON.stringify(next, null, 2));
     return next;

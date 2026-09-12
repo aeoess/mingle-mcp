@@ -414,12 +414,60 @@ test("prioritize_candidates says it passes through the assistant's own context",
   assert.ok(d.includes("never persisted anywhere shared, and is never visible to a counterpart. It does pass through your own assistant's context like any tool call."), d);
 });
 
-test("SKILL keeps every session-start call inside the Rule 1 gate and never uses get_digest there", () => {
+test("SKILL keeps every session-start call inside the Rule 1 gate", () => {
   const skill = readFileSync(join(root, "skills", "mingle", "SKILL.md"), "utf-8");
-  assert.equal(/at session start, calls get_digest/.test(skill), false, "the example no longer calls get_digest at session start");
-  const rule5 = skill.slice(skill.indexOf("### Rule 5"), skill.indexOf("### Rule 6"));
-  assert.match(rule5, /Rule 1 gate/);
-  assert.match(rule5, /pulse: true/);
-  assert.match(rule5, /Never call `get_digest` at session start/);
+
+  // Rule 1 is the only session-start rule, and it says the whole condition in one place.
+  const rule1 = skill.slice(skill.indexOf("### Rule 1"), skill.indexOf("### Rule 2"));
+  assert.match(rule1, /Nothing contacts Mingle at session start unless the user has turned that on/);
+  assert.match(rule1, /live card AND `background_checks` is `on`/);
+  assert.match(rule1, /absent means off/);
+  assert.match(rule1, /`mingle_inbox`/, "and the call it authorizes is the one that changes nothing");
+  assert.match(rule1, /advances no read marker/);
+
+  // The returning-user rule runs INSIDE that gate and says so, rather than restating the
+  // condition in its own words, which is how the two drifted apart before.
+  const returning = skill.slice(skill.indexOf("### Rule 6"), skill.indexOf("### Rule 7"));
+  assert.match(returning, /Rule 1 gate/);
+  assert.match(returning, /With the gate closed, check nothing at session start/);
+
+  // No tool that advances a read marker is on this surface at all, so none can be reached
+  // at session start by any route.
+  assert.equal(/get_digest/.test(skill), false, "get_digest is not on the default surface");
+  assert.equal(/pulse: true/.test(skill), false, "and neither is the pulse flag it gated");
+
   assert.equal(readFileSync(join(root, "openclaw-bundle", "skills", "mingle", "SKILL.md"), "utf-8"), skill, "the bundle copy matches");
+});
+
+test("SKILL names the eight tools and no tool outside them, except in the legacy appendix", () => {
+  // The SKILL is what a host model reads before it reads any tool description. A name in here
+  // that is not on the default surface is an instruction to call something that does not
+  // exist, which is worse than an omission because the model will try.
+  const skill = readFileSync(join(root, "skills", "mingle", "SKILL.md"), "utf-8");
+  const appendixAt = skill.indexOf("## Appendix: the older tool surface");
+  assert.ok(appendixAt > 0, "the legacy surface is documented in one place, at the end");
+  const body = skill.slice(0, appendixAt);
+
+  const EIGHT = [
+    "publish_intent", "find_people", "mingle_inbox", "request_intro",
+    "respond_intro", "continue_connection", "manage_intent", "mingle_settings",
+  ];
+  for (const name of EIGHT) {
+    assert.ok(body.includes(name), `${name} is not mentioned anywhere in the SKILL`);
+  }
+
+  // Every backticked snake_case identifier in the body has to be one of the eight, a setting,
+  // or a file. Anything else is a tool name that no longer resolves.
+  const allowed = new Set([
+    ...EIGHT,
+    "background_checks", "share_contact", "withdraw_contact", "propose_plan", "approve_plan",
+    "withdraw_request", "withdraw_interest", "block_pair", "take_card_down", "not_now_and_block",
+    "stop_email", "set_email", "approved_digest", "request_id", "confirm",
+    "counterparty_contact", "waiting_on_your_person", "principal_statement", "team_up",
+    "event_ref", "skill_version", "not_now", "MINGLE_LEGACY_TOOLS",
+  ]);
+  const found = new Set<string>();
+  for (const m of body.matchAll(/`([A-Za-z][A-Za-z0-9]*_[A-Za-z0-9_]+)`/g)) found.add(m[1]);
+  const unknown = [...found].filter(n => !allowed.has(n));
+  assert.deepEqual(unknown, [], `the SKILL names identifiers that are not on the default surface: ${unknown.join(", ")}`);
 });

@@ -1,6 +1,6 @@
 {
   "name": "mingle-mcp",
-  "version": "3.2.2",
+  "version": "4.0.0",
   "mcpName": "io.github.aeoess/mingle",
   "description": "Your AI meets other people's AIs. You meet the people. Agent-native networking via MCP.",
   "type": "module",
@@ -16,6 +16,7 @@
   ],
   "scripts": {
     "build": "tsc && chmod 755 build/bin.js build/index.js build/setup.js",
+    "prepublishOnly": "npm run build && npm test && npm run bundle:check",
     "bundle:sync": "mkdir -p openclaw-bundle/skills/mingle && cp skills/mingle/SKILL.md openclaw-bundle/skills/mingle/SKILL.md && cp skills/mingle/_meta.json openclaw-bundle/skills/mingle/_meta.json && cmp skills/mingle/SKILL.md openclaw-bundle/skills/mingle/SKILL.md && cmp skills/mingle/_meta.json openclaw-bundle/skills/mingle/_meta.json && echo 'bundle:sync OK - openclaw-bundle/skills/mingle is identical to skills/mingle'",
     "bundle:check": "diff -u skills/mingle/SKILL.md openclaw-bundle/skills/mingle/SKILL.md && diff -u skills/mingle/_meta.json openclaw-bundle/skills/mingle/_meta.json && echo 'bundle:check OK - no drift'",
     "bundle:smoke": "node scripts/bundle-smoke.mjs",
