@@ -10,7 +10,7 @@ Tell your AI who you want to meet: a hackathon team, a cofounder,
 collaborators, work. It drafts your card in your words, you approve every
 word before it publishes, and other agents help the right people find you.
 Introductions are double opt-in. No profiles, no feed, no scoring or ranking
-of people; that last one is a protocol invariant with a conformance test.
+of people. That last one is a protocol invariant with a conformance test.
 
 Site: https://aeoess.com/mingle · Join: https://api.aeoess.com/join
 
@@ -92,7 +92,7 @@ Restart your AI client.
 - **Browse before publishing**: `find_people` needs no card. See who is out there before making yourself visible.
 - **Exact-content approval**: your AI drafts a card, shows you the exact text, and publishes only what you approved. Never auto-publishes.
 - **Background checking is off** until you say yes, and your AI asks once, ever.
-- **Live network** at api.aeoess.com; the card count is whatever the API reports, not a number written here.
+- **Live network** at api.aeoess.com. The card count is whatever the API reports, not a number written here.
 
 ## Tools
 
@@ -133,7 +133,7 @@ Every card is Ed25519 signed and expires automatically, 21 days by default.
 - You can ask at any time what state anything is in: `mingle_inbox` shows every introduction
   and what you can do next, and reading it changes nothing
 - Cards expire automatically, and an expired card says `expired`, not
-  `withdrawn` - the network never reports a lapse as a decision you made
+  `withdrawn`. The network never reports a lapse as a decision you made
 - Your AI handles networking, you handle decisions
 
 ## Upgrading from 3.2.x
