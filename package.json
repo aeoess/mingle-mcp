@@ -21,7 +21,7 @@
     "bundle:check": "diff -u skills/mingle/SKILL.md openclaw-bundle/skills/mingle/SKILL.md && diff -u skills/mingle/_meta.json openclaw-bundle/skills/mingle/_meta.json && echo 'bundle:check OK - no drift'",
     "bundle:smoke": "node scripts/bundle-smoke.mjs",
     "dev": "tsx watch src/index.ts",
-    "pretest": "node -e \"const fs=require('fs');const n=(fs.existsSync('test')?fs.readdirSync('test'):[]).filter(f=>f.endsWith('.test.ts')).length;if(!n){console.error('pretest guard: zero *.test.ts files in test/ — refusing to report a vacuous pass. Restore the test suite before running npm test.');process.exit(1)}console.log('pretest guard: '+n+' test file(s) found')\"",
+    "pretest": "node scripts/pretest-guard.mjs",
     "test": "tsx --test test/*.test.ts"
   },
   "keywords": [

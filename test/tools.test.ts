@@ -494,8 +494,14 @@ test("SKILL names no tool a 4.0.0 install does not offer", () => {
     "stop_email", "set_email", "background_checks", "team_up",
   ];
   const FIELDS = [
-    "approved_digest", "request_id", "confirm", "counterparty_contact", "waiting_on_your_person",
-    "asked_of_them", "they_asked", "principal_statement", "event_ref", "skill_version",
+    // The inbox contract, as it is now. The three names this list used to carry,
+    // `waiting_on_your_person`, `asked_of_them` and `they_asked`, are deliberately gone.
+    // They are not merely renamed: the two direction values were inverted, so a SKILL that
+    // used them again would teach the defect back in. Leaving them out of the allow-list is
+    // what makes their return a test failure rather than a quiet regression.
+    "approved_digest", "request_id", "confirm", "counterparty_contact", "request_note",
+    "request_note_author", "can_do_now", "projection_status", "projection_note",
+    "principal_statement", "event_ref", "skill_version",
     "team_size_sought", "artifact_link", "subject_binding", "agent_assisted", "card_hash",
     "MINGLE_LEGACY_TOOLS",
   ];

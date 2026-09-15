@@ -113,12 +113,22 @@ When the user asks directly ("anything on Mingle?"), call `mingle_inbox` the sam
 way. Their request is the authorization; the setting gates automatic activity, not
 them.
 
-**Introductions.** Every live introduction is under `waiting_on_your_person`, both the ones
-asked of your person and the ones they asked for, and each row's `direction` says which:
-`asked_of_them` or `they_asked`. Mention it once, in one sentence, and say which way it
-points. "You have one intro request waiting on Mingle" for `asked_of_them`. "Your
-introduction request is still waiting on them" for `they_asked`. Quote any note as the other
-person's words. Wait for your person before responding to anything.
+**Introductions.** Every live introduction is under `introductions`, both the ones asked of
+your person and the ones they asked for. Each row's `direction` says which way it points.
+`incoming` means someone asked for an introduction to your person. `outgoing` means your
+person asked for one. Mention it once, in one sentence, and say which way it points. "You
+have one intro request waiting on Mingle" for `incoming`. "Your introduction request is
+still waiting on them" for `outgoing`.
+
+The note is in `request_note`, and `request_note_author` says whose words those are, either
+`counterparty` or `you`. Quote a `counterparty` note as the other person's words. Never read
+your person their own note as though a stranger wrote it. Wait for your person before
+responding to anything.
+
+If a row has `projection_status: "unavailable"`, its `can_do_now` is empty because the
+server could not derive that introduction's state, not because there is nothing your person
+can do. Say that, in the words of `projection_note`. Do not tell them the introduction is
+finished or that no action is possible.
 
 **A contact you have not relayed.** If a connection now carries a
 `counterparty_contact` you have not handed over yet, hand it over once: "Your
