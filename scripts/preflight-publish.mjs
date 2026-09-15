@@ -211,14 +211,27 @@ console.log('\n5. the tree')
 }
 
 // ── The publish commands, and the clock ───────────────────────────────────
+// THE CLOCK BELONGS TO ONE RELEASE. The thirty day legacy window was promised in 4.0.0 and
+// is anchored to 4.0.0's own npm publication instant. Every later release inherits that
+// anchor and must not initialize or move it. This banner used to print the initialization
+// procedure for whatever version was being released, which would have told the operator to
+// reset the clock on 5.0.0. The server's markers are INSERT OR IGNORE, so a repeat set
+// through that path is a no-op, but that is a backstop and not a reason to print a wrong
+// instruction.
+const CLOCK_ANCHOR_RELEASE = '4.0.0'
 console.log(`\n${failed === 0 ? 'PREFLIGHT OK' : `PREFLIGHT FAILED with ${failed} problem(s)`}`)
 console.log(`
 Publish, once this is green and the API deploy is already live:
 
   npm publish --access public
   git tag -a v${VERSION} -m "mingle-mcp ${VERSION}"
+`)
 
+if (VERSION === CLOCK_ANCHOR_RELEASE) console.log(`
 THE 30 DAY COMPATIBILITY CLOCK. Read this before typing anything.
+
+  This is ${CLOCK_ANCHOR_RELEASE}, the release the window was promised in, so the clock is
+  initialized here and nowhere else.
 
   The window runs from the moment the canonical MCP became publicly available, which is the
   npm publication instant and nothing else. Not the API deploy, not the local clock before
@@ -236,5 +249,32 @@ THE 30 DAY COMPATIBILITY CLOCK. Read this before typing anything.
 
   The markers are INSERT OR IGNORE. A wrong instant CANNOT be corrected by setting the
   variable again, so step 3 is read from the registry and never from memory.
+`)
+else console.log(`
+THE 30 DAY COMPATIBILITY CLOCK. Read this before typing anything.
+
+  DO NOT TOUCH IT. This is ${VERSION}, not ${CLOCK_ANCHOR_RELEASE}.
+
+  The window was promised to published 3.2.x clients in ${CLOCK_ANCHOR_RELEASE} and is anchored to
+  ${CLOCK_ANCHOR_RELEASE}'s own npm publication instant. It is already stamped on the API. Publishing
+  ${VERSION} does not restart it, shorten it or extend it, and ${VERSION} has no business
+  attempting to.
+
+  Do NOT set MINGLE_CANONICAL_MCP_RELEASED_AT. Do not restart the API to change it. The
+  server's markers are INSERT OR IGNORE, so a set through that path would be a no-op, but
+  that is a backstop behind a correct procedure and not a substitute for one.
+
+  Verify only, before and after publishing, that the instant did not change:
+
+    curl -s https://api.aeoess.com/ | python3 -m json.tool | grep -A2 write_authorization
+
+  legacy_cutoff_at must read the same instant both times, and legacy_accepted must still be
+  true. If either changed, stop and find out what wrote it.
+
+  Record ${VERSION}'s own publication timestamp for the release record:
+
+    npm view mingle-mcp@${VERSION} time --json
+
+  That timestamp is provenance. It is not an input to the clock.
 `)
 process.exit(failed === 0 ? 0 : 1)
