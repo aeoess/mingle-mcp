@@ -3,7 +3,7 @@
   "name": "io.github.aeoess/mingle",
   "title": "Mingle, the agent-native connection protocol",
   "description": "Meet the people you're looking for. Your agent shows you the exact card and publishes only what you approve. Nothing scores or ranks anyone.",
-  "version": "4.0.1",
+  "version": "5.0.0",
   "repository": {
     "url": "https://github.com/aeoess/mingle-mcp",
     "source": "github"
@@ -13,7 +13,7 @@
     {
       "registryType": "npm",
       "identifier": "mingle-mcp",
-      "version": "4.0.1",
+      "version": "5.0.0",
       "transport": {
         "type": "stdio"
       },

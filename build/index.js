@@ -84,7 +84,7 @@ async function api(path, opts, timeoutMs = API_TIMEOUT_MS) {
 }
 const server = new McpServer({
     name: "mingle",
-    version: "4.0.1",
+    version: "5.0.0",
 });
 // ══════════════════════════════════════════════════════════════
 // The registration gate
