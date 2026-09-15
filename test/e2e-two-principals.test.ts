@@ -113,7 +113,7 @@ async function principal(name: string): Promise<Principal> {
   env.USERPROFILE = home;
   env.MINGLE_API_URL = base;
   const transport = new StdioClientTransport({
-    command: process.execPath, args: ["--import", "tsx", join(root, "src", "index.ts")],
+    command: process.execPath, args: process.env.MINGLE_MCP_ENTRY ? [process.env.MINGLE_MCP_ENTRY] : ["--import", "tsx", join(root, "src", "index.ts")],
     env, cwd: root, stderr: "pipe",
   });
   const client = new Client({ name: `e2e-${name}`, version: "0.0.0" });
@@ -223,7 +223,7 @@ test("E2E: publish, find, request, interest, both share, release only after both
   // ── publish ──
   const aPub = await approveAndSend(alice, "publish_intent", {
     action: "publish",
-    headline: "Building agent identity tooling, looking for a technical cofounder",
+    headline: "DEMO: Building agent identity tooling, looking for a technical cofounder",
     seeking: ["a cofounder who has shipped infrastructure"],
     offering: ["protocol design and a working prototype"],
     purposes: ["cofound"],
@@ -232,7 +232,7 @@ test("E2E: publish, find, request, interest, both share, release only after both
   alice.cardId = aPub.card_id;
   const bPub = await approveAndSend(bob, "publish_intent", {
     action: "publish",
-    headline: "Shipped three infrastructure products, want to cofound something in agents",
+    headline: "DEMO: Shipped three infrastructure products, want to cofound something in agents",
     seeking: ["a technical cofounder with a prototype"],
     offering: ["shipping, hiring and going to market"],
     purposes: ["cofound"],
@@ -270,11 +270,16 @@ test("E2E: publish, find, request, interest, both share, release only after both
 
   // Bob sees it, with Alice's note labelled as hers and the actions the SERVER says he has.
   const bInbox = await call(bob, "mingle_inbox", {});
-  const waiting = bInbox.waiting_on_your_person.find((x: any) => x.intro_id === introId);
+  const waiting = bInbox.introductions.find((x: any) => x.intro_id === introId);
   assert.ok(waiting, `bob does not see the request: ${JSON.stringify(bInbox)}`);
-  assert.equal(waiting.direction, "asked_of_them");
+  assert.equal(waiting.direction, "incoming");
+  assert.equal(waiting.request_note_author, "counterparty");
+  const outgoing = (await call(alice, "mingle_inbox", {})).introductions.find((x: any) => x.intro_id === introId);
+  assert.equal(outgoing.direction, "outgoing");
+  assert.equal(outgoing.request_note_author, "you");
+  assert.equal(outgoing.request_note, waiting.request_note);
   assert.equal(waiting.state, "requested");
-  assert.match(waiting.note_written_by_the_other_side, /You have shipped what I have not/);
+  assert.match(waiting.request_note, /You have shipped what I have not/);
   const canDo = waiting.can_do_now.map((x: any) => x.operation);
   assert.deepEqual([...canDo].sort(), ["block_pair", "decline", "express_interest"]);
 
@@ -284,7 +289,7 @@ test("E2E: publish, find, request, interest, both share, release only after both
   assert.equal(interest.state, "interested");
   // Nothing about anyone's contact has moved.
   const afterInterest = await call(alice, "mingle_inbox", {});
-  const aRow = afterInterest.waiting_on_your_person.find((x: any) => x.intro_id === introId);
+  const aRow = afterInterest.introductions.find((x: any) => x.intro_id === introId);
   assert.equal(aRow.counterparty_contact, null, "interest released no contact");
 
   // ── optional fit, SKIPPED because the surface is off, not stubbed ──
@@ -301,7 +306,7 @@ test("E2E: publish, find, request, interest, both share, release only after both
   assert.match(aShare.next, /Waiting on the other side/);
   // And Bob still cannot see it.
   const bMid = await call(bob, "mingle_inbox", {});
-  const bRow = bMid.waiting_on_your_person.find((x: any) => x.intro_id === introId);
+  const bRow = bMid.introductions.find((x: any) => x.intro_id === introId);
   assert.equal(bRow.counterparty_contact, null, "the contact is held, not delivered");
   assert.equal(bRow.state, "connecting");
 
@@ -316,12 +321,12 @@ test("E2E: publish, find, request, interest, both share, release only after both
 
   // ── connected, from both sides ──
   const aFinal = await call(alice, "mingle_inbox", { include_finished: true });
-  const aDone = aFinal.waiting_on_your_person.find((x: any) => x.intro_id === introId);
+  const aDone = aFinal.introductions.find((x: any) => x.intro_id === introId);
   assert.equal(aDone.state, "connected");
   assert.equal(aDone.counterparty_contact, "bob@example.com", "Alice receives Bob's line");
   assert.equal(aDone.complete, true);
   const bFinal = await call(bob, "mingle_inbox", { include_finished: true });
-  const bDone = bFinal.waiting_on_your_person.find((x: any) => x.intro_id === introId);
+  const bDone = bFinal.introductions.find((x: any) => x.intro_id === introId);
   assert.equal(bDone.state, "connected");
   assert.equal(bDone.counterparty_contact, "alice@example.com");
 });
@@ -343,7 +348,7 @@ test("E2E: a released contact cannot be withdrawn, and the refusal names block_p
   assert.match(out.error, /block_pair/);
   // And both contacts are still readable, which is the point of never retracting one.
   const still = await call(alice, "mingle_inbox", { include_finished: true });
-  const row = still.waiting_on_your_person.find((x: any) => x.intro_id === introId);
+  const row = still.introductions.find((x: any) => x.intro_id === introId);
   assert.equal(row.counterparty_contact, "bob@example.com");
   assert.equal(row.state, "connected", "and the refusal changed nothing");
 });
@@ -495,7 +500,7 @@ test("E2E: NOTIFICATION OUTAGE, a confirmed subscriber whose mail cannot leave s
   // And both sides read the connection as made.
   for (const who of [a8, b8]) {
     const row = (await call(who, "mingle_inbox", { include_finished: true }))
-      .waiting_on_your_person.find((x: any) => x.intro_id === req.intro_id);
+      .introductions.find((x: any) => x.intro_id === req.intro_id);
     assert.equal(row.state, "connected");
     assert.equal(row.complete, true);
   }
@@ -537,7 +542,7 @@ test("E2E: REPLACEMENT, replacing a card mid flight leaves a live introduction a
   const done = await approveAndSend(b9, "continue_connection", { intro_id: req.intro_id, action: "share_contact", contact: "b9@example.com" });
   assert.equal(done.released, true, "a superseded card does not strand a live introduction");
   const row = (await call(b9, "mingle_inbox", { include_finished: true }))
-    .waiting_on_your_person.find((x: any) => x.intro_id === req.intro_id);
+    .introductions.find((x: any) => x.intro_id === req.intro_id);
   assert.equal(row.state, "connected");
 
   // Renew is the other card action, and it changes nothing but the expiry.
@@ -594,7 +599,7 @@ test("E2E: PRIVACY, a contact line never appears in anything the other side read
   // allowed to see what they sent. A test that only proved absence everywhere could pass
   // against a server that had simply dropped the value.
   const aOwn = await call(a4, "mingle_inbox", { include_finished: true });
-  const aRow = aOwn.waiting_on_your_person.find((x: any) => x.intro_id === req.intro_id);
+  const aRow = aOwn.introductions.find((x: any) => x.intro_id === req.intro_id);
   assert.equal(aRow.state, "connecting", "the share is recorded and the state moved");
   assert.equal(aRow.counterparty_contact, null, "and Alice has received nothing, because Bob has shared nothing");
 });
@@ -624,7 +629,7 @@ test("E2E: MULTI CARD, one principal with two cards acts as the card they name",
   void raw;
 
   const bInbox = await call(b5, "mingle_inbox", {});
-  const row = bInbox.waiting_on_your_person.find((x: any) => x.intro_id === req.intro_id);
+  const row = bInbox.introductions.find((x: any) => x.intro_id === req.intro_id);
   assert.ok(row, "the counterparty sees it");
   assert.equal(row.their_card, second.card_id, "and the counterparty is shown that same card as theirs");
   assert.equal(row.your_card, bc.card_id, "beside their own");
@@ -663,9 +668,9 @@ test("E2E: GRANDFATHERED LEGACY CLIENT, a 3.2.x body still works beside a canoni
 
   // The counterparty sees it through the NEW surface, so the two lanes are one product.
   const bInbox = await call(b6, "mingle_inbox", {});
-  const row = bInbox.waiting_on_your_person.find((x: any) => x.intro_id === body.id);
+  const row = bInbox.introductions.find((x: any) => x.intro_id === body.id);
   assert.ok(row, `the canonical client cannot see a legacy request: ${JSON.stringify(bInbox)}`);
-  assert.match(row.note_written_by_the_other_side, /Sent the old way/);
+  assert.match(row.request_note, /Sent the old way/);
 
   // And the capability field says the window is open, which is what makes the above true.
   const rootIndex: any = await (await fetch(`${base}/`)).json();
@@ -713,7 +718,7 @@ test("E2E: MIXED LANE, a legacy client and a canonical one move the same connect
   assert.equal(acceptBody.status, "accepted");
 
   // Alice, on the canonical lane, sees a live introduction and shares her line with an envelope.
-  const aRow = (await call(a11, "mingle_inbox", {})).waiting_on_your_person.find((x: any) => x.intro_id === introId);
+  const aRow = (await call(a11, "mingle_inbox", {})).introductions.find((x: any) => x.intro_id === introId);
   assert.ok(aRow, "the upgraded side sees the introduction the older side accepted");
   const aShare = await approveAndSend(a11, "continue_connection", {
     intro_id: introId, action: "share_contact", contact: "alice11-canonical@example.com",
@@ -729,7 +734,7 @@ test("E2E: MIXED LANE, a legacy client and a canonical one move the same connect
   assert.ok(stored.to_contact, "and the legacy side's");
 
   const done = (await call(a11, "mingle_inbox", { include_finished: true }))
-    .waiting_on_your_person.find((x: any) => x.intro_id === introId);
+    .introductions.find((x: any) => x.intro_id === introId);
   assert.equal(done.state, "connected", "a mixed pair reaches connected");
   assert.equal(done.counterparty_contact, "bob11-legacy@example.com",
     "and the upgraded side receives the older side's line");

@@ -162,3 +162,12 @@ error: "Update Mingle to continue this connection."
 ## License
 
 Apache-2.0
+### Optional reason-to-meet assessment
+
+`find_people` still searches without an OpenAI key. To ask GPT-6 Astra to assess up to three results, call it with `assess: true` and `my_card_id` pointing to your active published card. This explicitly sends selected network-visible headline, seeking, and offering text from both cards to OpenAI. Private fields, identity keys and contact details are excluded. Configure `OPENAI_API_KEY` in the MCP server environment. Node 22 or later is required.
+
+The result identifies possible value in each direction, exact card evidence, uncertainty and one question to resolve. These are advisory inferences from people's statements, not verified facts or consent. No strong reciprocal reason is a valid outcome. The model does not rank people globally or request an introduction. Existing preview and approval steps still apply.
+
+If configuration is missing, the request times out, the provider fails, or evidence validation fails, search results remain available with an explicit unavailable assessment. No alternate model is used. There is one bounded request per assessment, with no automatic retries. `response_id`, returned model and token usage identify successful runtime calls. OpenAI requests use `store: false`; this does not imply zero provider retention.
+
+Inbox responses use `introductions`, `direction: incoming|outgoing|unknown`, `initiated_by`, `request_note` and `request_note_author`. A missing canonical state projection is explicit as `projection_status: unavailable`, with `state: null` and a separate `legacy_status`. Empty actions in that case are not evidence that no action is possible. Inbox reads do not create migration facts.
