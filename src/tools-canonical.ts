@@ -61,6 +61,14 @@ export const CANONICAL_TOOL_NAMES = [
  *  server's own approved text, repeated rather than paraphrased. */
 const UPGRADE_NOTE = canon.UPGRADE_REQUIRED_TEXT;
 
+/** Mirrors MAX_NOTE at intros-routes.ts:53 on the server. Exported so index.ts's legacy
+ *  request_intro_v3 reuses the same number rather than carrying its own literal 200. A
+ *  request_intro note over this length was previewed clean and only refused at confirm,
+ *  after a digest was already issued for a note the server would never accept: this
+ *  constant plus the check in request_intro's handler below is the fix, so the preview
+ *  never approves a note that confirm would then refuse. */
+export const NOTE_MAX_LENGTH = 200;
+
 // ── The one write path ────────────────────────────────────────────────────
 
 interface ActArgs {
@@ -484,9 +492,17 @@ export function registerCanonicalTools(server: any, ctx: ToolContext): void {
       const requestId = a.request_id ?? canon.newRequestId();
       let payload: Record<string, unknown>;
       try {
+        const note = trimmed(a.note, "note");
+        // Measured on the trimmed string, which is the string that gets signed and sent,
+        // not the raw argument: the same rule the contact field's comment at
+        // intros-routes.ts:482-485 spells out, so a preview and a confirm never disagree
+        // about the length of edge whitespace that will not be there by the time it ships.
+        if (note.length > NOTE_MAX_LENGTH) {
+          throw new canon.CanonicalError("note_too_long", `note is longer than ${NOTE_MAX_LENGTH} characters`);
+        }
         payload = {
           from_card: a.from_card_id, to_card: a.to_card_id,
-          purpose: a.purpose, note: trimmed(a.note, "note"),
+          purpose: a.purpose, note,
         };
       } catch (e: any) {
         return ctx.asText({ refused: true, code: e.code, error: e.message }, true);

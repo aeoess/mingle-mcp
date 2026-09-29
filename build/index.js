@@ -21,7 +21,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { loadIdentity, loadPreferences, cacheCard, clearCachedCard, classifyMatches, recordSurfaced } from "./identity.js";
 import { buildCard, cardContentHash, sealCard, explainVisibility, trackV3Card, listV3Cards, getLastCheck, setLastCheck, getBackgroundChecks, backgroundChecksAllowed, setBackgroundChecks } from "./v3.js";
 import { sanitize } from "./sanitize.js";
-import { CANONICAL_TOOL_NAMES, registerCanonicalTools } from "./tools-canonical.js";
+import { CANONICAL_TOOL_NAMES, registerCanonicalTools, NOTE_MAX_LENGTH } from "./tools-canonical.js";
 const SKILL_VERSION = "mingle-composer-v1";
 const API = process.env.MINGLE_API_URL || "https://api.aeoess.com";
 // Persistent identity, loaded from ~/.mingle/identity.json
@@ -938,7 +938,7 @@ async function sendRespond(id, action, contact) {
 server.tool("request_intro_v3", "Ask to be introduced to a Mingle v3 card found via search_cards. Two steps, like publishing a card: the first call returns a preview of exactly what will be sent (your card, the target, the purpose, your note) and sends nothing; show it to the principal, then call again with the same fields and confirm:true only after they approve. Notes are short and any links in them are removed by the server before delivery. One pending request per pair, and a small daily cap applies.", {
     to_card_id: z.string().describe("The card_id to request an intro to (from search_cards)"),
     purpose: z.enum(INTRO_PURPOSES).describe("Why you want the intro"),
-    note: z.string().max(200).optional().describe("Short note to the other side (max 200 chars; links are stripped by the server)"),
+    note: z.string().max(NOTE_MAX_LENGTH).optional().describe("Short note to the other side (max 200 chars; links are stripped by the server)"),
     from_card_id: z.string().optional().describe("Which of your published cards to send from; defaults to your most recent"),
     confirm: z.boolean().optional().describe("Set true only after the principal approved the preview"),
 }, async (a) => {

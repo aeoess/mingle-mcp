@@ -200,6 +200,73 @@ test("GATE: a local refusal happens before the preview, with the server's own co
 });
 
 // ══════════════════════════════════════════════════════════════
+// A note over the server's length limit is refused at preview, not just at confirm
+// ══════════════════════════════════════════════════════════════
+// Observed before this fix: a 212 character note previewed clean, was approved, and the
+// confirm call with that approved digest was then refused note_too_long by the server. A
+// digest must never be issued for a note that confirm will refuse.
+
+test("PREVIEW: a note at exactly 200 characters passes", async () => {
+  const note = "a".repeat(200);
+  const { isError, out } = await callTool("request_intro", {
+    to_card_id: "card-them", from_card_id: "card-me", purpose: "collaborate", note,
+  });
+  assert.equal(isError, false, JSON.stringify(out));
+  assert.equal(out.step, "preview");
+  assert.equal(out.approve_this_exactly.note.length, 200);
+  assert.match(out.approved_digest, /^[0-9a-f]{64}$/);
+});
+
+test("PREVIEW: a note at 201 characters is refused note_too_long, with no digest issued", async () => {
+  const note = "a".repeat(201);
+  const { isError, out } = await callTool("request_intro", {
+    to_card_id: "card-them", from_card_id: "card-me", purpose: "collaborate", note,
+  });
+  assert.equal(isError, true);
+  assert.equal(out.refused, true);
+  assert.equal(out.code, "note_too_long");
+  assert.equal(out.approved_digest, undefined, "no digest for a note confirm would refuse");
+});
+
+test("PREVIEW then CONFIRM: a note that passes preview also passes confirm", async () => {
+  routes.set("POST /api/v3/intros/request", () => ({ status: 201, body: { intro_id: "intro-note-200", state: "requested" } }));
+  const note = "a".repeat(200);
+  const pv = await callTool("request_intro", {
+    to_card_id: "card-them", from_card_id: "card-me", purpose: "collaborate", note,
+  });
+  assert.equal(pv.out.step, "preview");
+  const { isError, out } = await callTool("request_intro", {
+    to_card_id: "card-them", from_card_id: "card-me", purpose: "collaborate", note,
+    request_id: pv.out.request_id, confirm: true, approved_digest: pv.out.approved_digest,
+  });
+  assert.equal(isError, false, JSON.stringify(out));
+  assert.equal(out.requested, true);
+  assert.equal(out.intro_id, "intro-note-200");
+});
+
+test("PREVIEW: multibyte text counts by JS string length (UTF-16 code units), the same unit the server measures with .length", async () => {
+  // Each CJK Unified Ideograph here is one UTF-16 code unit and one code point, so
+  // characters, code points and JS .length all agree at 200 -- but UTF-8 bytes would be
+  // 600, three per character. If the count were bytes, this would wrongly refuse.
+  const note = "你".repeat(200);
+  assert.equal(note.length, 200);
+  assert.equal(Buffer.byteLength(note, "utf8"), 600, "sanity: this note is 600 bytes in UTF-8");
+  const { isError, out } = await callTool("request_intro", {
+    to_card_id: "card-them", from_card_id: "card-me", purpose: "collaborate", note,
+  });
+  assert.equal(isError, false, JSON.stringify(out));
+  assert.equal(out.step, "preview");
+  assert.match(out.approved_digest, /^[0-9a-f]{64}$/);
+
+  const overLong = "你".repeat(201);
+  const refused = await callTool("request_intro", {
+    to_card_id: "card-them", from_card_id: "card-me", purpose: "collaborate", note: overLong,
+  });
+  assert.equal(refused.isError, true);
+  assert.equal(refused.out.code, "note_too_long");
+});
+
+// ══════════════════════════════════════════════════════════════
 // Interest is not contact, and contact carries a commitment
 // ══════════════════════════════════════════════════════════════
 
