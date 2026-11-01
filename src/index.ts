@@ -899,8 +899,8 @@ server.tool(
   },
   async (a) => {
     try {
-      const fetched = await readOwnCard(api, sign, keys, a.card_id);
-      if (fetched.error || !fetched.card) return { content: [{ type: "text" as const, text: `Card not found: ${a.card_id}` }], isError: true };
+      const fetched = await readOwnCard(apiRaw, api, sign, keys, a.card_id);
+      if (fetched.error || !fetched.card) return { content: [{ type: "text" as const, text: fetched.error ? `Cannot renew: ${fetched.error}` : `Card not found: ${a.card_id}` }], isError: true };
       if (fetched.card.subject_key !== keys.publicKey) return { content: [{ type: "text" as const, text: "That card is not yours to renew." }], isError: true };
       if (fetched.revocation_status !== "active") return { content: [{ type: "text" as const, text: `Only an active card can be renewed (this one is ${fetched.revocation_status}).` }], isError: true };
 

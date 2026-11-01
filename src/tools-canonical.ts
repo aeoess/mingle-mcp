@@ -273,8 +273,8 @@ export function registerCanonicalTools(server: any, ctx: ToolContext): void {
         if (a.action === "renew") {
           if (!a.card_id) return ctx.asText({ refused: true, error: "action:'renew' needs card_id." }, true);
           // The full card, not the public projection, so withheld fields survive the reseal.
-          const fetched = await readOwnCard(ctx.api, ctx.sign, ctx.keys, a.card_id);
-          if (fetched.error || !fetched.card) return ctx.asText({ refused: true, error: `no card ${a.card_id}` }, true);
+          const fetched = await readOwnCard(ctx.apiRaw, ctx.api, ctx.sign, ctx.keys, a.card_id);
+          if (fetched.error || !fetched.card) return ctx.asText({ refused: true, error: fetched.error ? String(fetched.error) : `no card ${a.card_id}` }, true);
           if (fetched.card.subject_key !== ctx.keys.publicKey) {
             return ctx.asText({ refused: true, error: "that card belongs to someone else" }, true);
           }

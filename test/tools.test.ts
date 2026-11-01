@@ -380,6 +380,11 @@ test("the principal's own card text is shown verbatim in get_card_status and ren
   assert.match(status.out.expiry_nudge.on_no, /replace_card/, "an update of a live card goes through replace_card");
   assert.equal(/compose \+ publish/.test(status.out.expiry_nudge.on_no), false);
 
+  // Renew reads the full card through owner-read on a current server.
+  routes.set("POST /api/v3/cards/card-own/owner-read", () => ({
+    card_id: "card-own", revocation_status: "active", projection: "owner_full", expires_at: new Date(Date.now() + 2 * 864e5).toISOString(),
+    card: { subject_key: identity.publicKey, card_type: "connection", headline, intents: ["collaborate"], seeking: [{ description: seeking }] },
+  }));
   const renew = await callTool("renew_card", { card_id: "card-own" });
   assert.equal(renew.out.step, "preview");
   assert.equal(renew.out.headline, headline);

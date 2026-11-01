@@ -6,15 +6,18 @@
  * new timestamps, so it needs the full card, which the server returns only to the
  * card's subject through owner-read, signed over "owner-read:<cardId>:<issued_at>".
  *
- * A server that predates owner-read answers with a non-JSON 404, so the read falls
- * back to the public fetch. The caller still checks subject_key and status, and a
- * fallback card with withheld fields fails renew at the server as changed content
- * rather than silently dropping those fields.
+ * Fallback is narrow on purpose. Only a server without the route at all (a 404 with
+ * no JSON body, which is what Express sends for an unknown route) gets the public
+ * fetch. Any other failure, including 401, 403, 404 "card not found", 5xx, a timeout
+ * or a 200 that is not a full owner card, returns an error, so an authorization
+ * failure can never turn into a renewal built from incomplete public content.
  */
+export type ApiRawFn = (path: string, opts?: RequestInit) => Promise<{ status: number; body: any }>;
 export type ApiFn = (path: string, opts?: RequestInit) => Promise<any>;
 export type SignFn = (payload: string, privateKey: string) => string;
 
 export async function readOwnCard(
+  apiRaw: ApiRawFn,
   api: ApiFn,
   sign: SignFn,
   keys: { publicKey: string; privateKey: string },
@@ -22,8 +25,9 @@ export async function readOwnCard(
   now: () => Date = () => new Date(),
 ): Promise<any> {
   const issued_at = now().toISOString();
+  let r: { status: number; body: any };
   try {
-    const r = await api(`/api/v3/cards/${encodeURIComponent(cardId)}/owner-read`, {
+    r = await apiRaw(`/api/v3/cards/${encodeURIComponent(cardId)}/owner-read`, {
       method: "POST",
       body: JSON.stringify({
         public_key: keys.publicKey,
@@ -31,9 +35,15 @@ export async function readOwnCard(
         signature: sign(`owner-read:${cardId}:${issued_at}`, keys.privateKey),
       }),
     });
-    if (r && !r.error && r.card) return r;
-  } catch {
-    // Older server without the route, or a network error. Fall through.
+  } catch (e) {
+    return { error: `owner read failed: ${(e as Error).message}` };
   }
-  return api(`/api/v3/cards/${encodeURIComponent(cardId)}`);
+  if (r.status === 200 && r.body?.projection === "owner_full" && r.body?.card && typeof r.body.card === "object") {
+    return r.body;
+  }
+  if (r.status === 404 && r.body === null) {
+    // The server predates owner-read. Its public fetch is the full card minus the envelope.
+    return api(`/api/v3/cards/${encodeURIComponent(cardId)}`);
+  }
+  return { error: `owner read refused (${r.status}): ${r.body?.error ?? "unexpected response"}` };
 }
