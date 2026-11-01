@@ -57,6 +57,10 @@ async function startApi(): Promise<string> {
       MINGLE_RECEIPT_PRIVKEY: rk.privateKey,
       MINGLE_RECEIPT_PUBKEY: rk.publicKey,
       MINGLE_PUBLIC_URL: `http://127.0.0.1:${port}`,
+      // The server refuses confirmation email to reserved test domains in production.
+      // This suite signs up example.com addresses and no mail transport is configured, so
+      // it sets the server's explicit test switch, as the server's own test script does.
+      MINGLE_ALLOW_RESERVED_EMAIL_DOMAINS: "1",
       // Both containment flags UNSET, deliberately. This is the configuration production
       // runs, so the end to end path is the path a real person takes, and the optional fit
       // steps are skipped rather than stubbed because the surface is off.
