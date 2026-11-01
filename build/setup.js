@@ -12,7 +12,7 @@ import { join, dirname } from "node:path";
 import { homedir, platform } from "node:os";
 const MINGLE_CONFIG = {
     command: "npx",
-    args: ["mingle-mcp@5.0.1"],
+    args: ["mingle-mcp@5.1.0"],
 };
 function getConfigPaths() {
     const home = homedir();

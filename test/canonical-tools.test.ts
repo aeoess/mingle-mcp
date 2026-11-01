@@ -645,3 +645,65 @@ test("ASSESSMENT: optional failure preserves discovery and never calls a write",
   assert.deepEqual(assessed.out.people,plain.out.people);assert.equal(assessed.out.assessment.status,"unavailable");
   assert.ok(seen.slice(before).every(x=>x.method==="GET" || x.path==="/api/v3/cards/search"));
 });
+
+// ══════════════════════════════════════════════════════════════
+// Events (5.1.0)
+// ══════════════════════════════════════════════════════════════
+
+test("EVENT: a card without an event is approved and sealed exactly as in 5.0.x", async () => {
+  routes.set("POST /api/v3/cards", () => ({ body: { card_id: "card-plain", expires_at: "2026-11-22T00:00:00.000Z" } }));
+  const args = { headline: "Building an MCP server for lab notebooks", seeking: ["people running agents on real data"], purposes: ["collaborate"] };
+  const preview = await callTool("publish_intent", args);
+  assert.equal(preview.out.step, "preview");
+  assert.equal("event" in preview.out.approve_this_exactly, false, "no event key appears when none was given");
+  assert.equal(preview.out.event_wall, undefined);
+  const done = await callTool("publish_intent", { ...args, confirm: true, approved_digest: preview.out.approved_digest });
+  assert.equal(done.out.published, true, JSON.stringify(done.out));
+  assert.equal(lastBodyTo("/api/v3/cards").card.event_ref, null, "the sealed card carries event_ref null, as before");
+  assert.equal(done.out.event_wall, undefined);
+});
+
+test("EVENT: an event id is shown before approval, bound by the digest, and sealed into event_ref", async () => {
+  routes.set("POST /api/v3/cards", () => ({ body: { card_id: "card-event", expires_at: "2026-11-22T00:00:00.000Z" } }));
+  const base = { headline: "Looking for people shipping agent evals", seeking: ["eval harness builders"], purposes: ["meet"] };
+  const plain = await callTool("publish_intent", base);
+  const preview = await callTool("publish_intent", { ...base, event: "mcp-night-sf" });
+  assert.equal(preview.out.approve_this_exactly.event, "mcp-night-sf");
+  assert.match(preview.out.event_wall, /\/e\/mcp-night-sf$/);
+  assert.match(preview.out.event_note, /public page/);
+  assert.notEqual(preview.out.approved_digest, plain.out.approved_digest, "adding an event is a change the person must approve");
+
+  // The digest for the plain card does not authorize the card with an event.
+  const before = countTo("/api/v3/cards");
+  const crossed = await callTool("publish_intent", { ...base, event: "mcp-night-sf", confirm: true, approved_digest: plain.out.approved_digest });
+  assert.equal(crossed.out.step, "changed");
+  assert.equal(countTo("/api/v3/cards"), before, "nothing was published");
+
+  const done = await callTool("publish_intent", { ...base, event: "mcp-night-sf", confirm: true, approved_digest: preview.out.approved_digest });
+  assert.equal(done.out.published, true, JSON.stringify(done.out));
+  const sent = lastBodyTo("/api/v3/cards").card;
+  assert.deepEqual(sent.event_ref, { event_id: "mcp-night-sf" });
+  assert.equal(sent.approval.card_hash.length, 64, "the event is inside the sealed, approved content");
+  assert.match(done.out.event_wall, /\/e\/mcp-night-sf$/);
+});
+
+test("EVENT: an event id that is not a plain slug is refused before anything is sent", async () => {
+  for (const bad of ["MCP-Night", "mcp/night", "-mcp", "", "a".repeat(65), "mcp night"]) {
+    const before = seen.length;
+    // The SDK may answer invalid arguments as an error result or as a rejected call.
+    let refused = false;
+    try { refused = (await callTool("publish_intent", { headline: "x", event: bad })).isError } catch { refused = true }
+    assert.equal(refused, true, `${JSON.stringify(bad)} should be refused`);
+    assert.equal(seen.length, before, `${JSON.stringify(bad)} sent nothing`);
+  }
+  const ok = await callTool("publish_intent", { headline: "x", event: "a".repeat(64) });
+  assert.equal(ok.out.step, "preview", "64 characters is the limit and passes");
+});
+
+test("EVENT: find_people narrows to one event with the field the route reads", async () => {
+  routes.set("POST /api/v3/cards/search", () => ({ body: { results: [{ card_id: "peer-1", headline: "At the event" }] } }));
+  await callTool("find_people", { query: "evals", event: "mcp-night-sf" });
+  assert.equal(lastBodyTo("/api/v3/cards/search").event_ref, "mcp-night-sf");
+  await callTool("find_people", { query: "evals" });
+  assert.equal("event_ref" in lastBodyTo("/api/v3/cards/search"), false, "no event filter unless asked");
+});

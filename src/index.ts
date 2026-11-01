@@ -95,7 +95,7 @@ async function api(path: string, opts?: RequestInit, timeoutMs = API_TIMEOUT_MS)
 
 const server = new McpServer({
   name: "mingle",
-  version: "5.0.1",
+  version: "5.1.0",
 });
 
 // ══════════════════════════════════════════════════════════════
@@ -1958,6 +1958,7 @@ registerCanonicalTools(server, {
   legacyNonce: newNonce,
   skillVersion: SKILL_VERSION,
   sign,
+  apiBase: API,
 });
 registeringCanonical = false;
 

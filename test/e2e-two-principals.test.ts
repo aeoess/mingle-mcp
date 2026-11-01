@@ -832,3 +832,34 @@ test("E2E: the server refuses an envelope this client did not sign", skipIfNoApi
   assert.equal(res.status, 403, "a signature from another key must not authorize this act");
   assert.equal((await res.json()).code, "signature_invalid");
 });
+
+test("E2E: EVENT, cards published for an event are on its wall and in its search, and nothing else is", skipIfNoApi, async () => {
+  const at1 = await principal("event1");
+  const at2 = await principal("event2");
+  const away = await principal("event3");
+  const c1 = await approveAndSend(at1, "publish_intent", { headline: "Event probe, attendee one builds eval harnesses", purposes: ["meet"], event: "e2e-meetup" });
+  const c2 = await approveAndSend(at2, "publish_intent", { headline: "Event probe, attendee two ships MCP servers", purposes: ["collaborate"], event: "e2e-meetup" });
+  const c3 = await approveAndSend(away, "publish_intent", { headline: "Event probe, not at the event", purposes: ["meet"] });
+  for (const c of [c1, c2, c3]) assert.equal(c.published, true, JSON.stringify(c));
+  assert.match(c1.event_wall, /\/e\/e2e-meetup$/);
+
+  // The server stored the event the person approved, on the card they approved.
+  const stored = queryApiDb<any>("SELECT event_ref_id FROM v3_cards WHERE card_id = ?", c1.card_id);
+  assert.equal(stored.event_ref_id, "e2e-meetup");
+
+  const found = await findReady(at1, { event: "e2e-meetup" });
+  const ids = (found.people ?? []).map((p: any) => p.card_id);
+  assert.ok(ids.includes(c2.card_id), `event search finds the other attendee: ${JSON.stringify(found)}`);
+  assert.ok(!ids.includes(c3.card_id), "and not the card published without the event");
+
+  const wall = await (await fetch(`${base}/e/e2e-meetup`)).text();
+  assert.ok(wall.includes("attendee one builds eval harnesses"), "the wall lists the first card");
+  assert.ok(wall.includes("attendee two ships MCP servers"), "and the second");
+  assert.ok(!wall.includes("not at the event"), "and not the card without the event");
+
+  // Renew reseals the stored card, so the event survives it.
+  const renewed = await approveAndSend(at1, "publish_intent", { action: "renew", card_id: c1.card_id });
+  assert.equal(renewed.renewed, true, JSON.stringify(renewed));
+  const after = queryApiDb<any>("SELECT event_ref_id FROM v3_cards WHERE card_id = ?", renewed.card_id);
+  assert.equal(after.event_ref_id, "e2e-meetup", "the renewed card is still for the event");
+});

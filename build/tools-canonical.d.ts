@@ -18,6 +18,8 @@ export interface ToolContext {
     /** The composer version stamped into every card, from the one place that owns it. */
     skillVersion: string;
     sign: (payload: string, privateKey: string) => string;
+    /** The API origin, so a preview can name the exact public page a card will appear on. */
+    apiBase?: string;
 }
 export declare const CANONICAL_TOOL_NAMES: readonly ["publish_intent", "find_people", "mingle_inbox", "request_intro", "respond_intro", "continue_connection", "manage_intent", "mingle_settings"];
 /** Mirrors MAX_NOTE at intros-routes.ts:53 on the server. Exported so index.ts's legacy

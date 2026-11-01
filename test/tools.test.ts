@@ -507,6 +507,8 @@ test("SKILL names no tool a 4.0.0 install does not offer", () => {
     "approved_digest", "request_id", "confirm", "counterparty_contact", "request_note",
     "request_note_author", "can_do_now", "projection_status", "projection_note",
     "principal_statement", "event_ref", "skill_version",
+    // 5.1.0: the public wall address publish_intent returns when a card is for an event.
+    "event_wall",
     "team_size_sought", "artifact_link", "subject_binding", "agent_assisted", "card_hash",
     "MINGLE_LEGACY_TOOLS",
   ];

@@ -148,6 +148,12 @@ const CONFIRM = {
     approved_digest: z.string().optional().describe("The approved_digest the preview returned, after the principal approved that exact content."),
 };
 const PURPOSES = ["cofound", "team_up", "collaborate", "meet", "advise", "work"];
+/** An event's short id. It becomes a path segment of the public wall page
+ *  (/e/<id>), so it is held to a slug a person can read aloud and type from a slide:
+ *  lowercase letters, digits and hyphens, starting with a letter or digit, at most 64. */
+const EVENT_ID = z.string().regex(/^[a-z0-9][a-z0-9-]{0,63}$/, "an event id is lowercase letters, digits and hyphens, at most 64, like 'mcp-night-sf'");
+/** The public page a card with this event id is listed on. */
+const eventWallUrl = (ctx, id) => `${(ctx.apiBase ?? "https://api.aeoess.com").replace(/\/$/, "")}/e/${encodeURIComponent(id)}`;
 /** The approval digest for a card action, which must bind the ACTION and the TARGET and not
  *  only the words.
  *
@@ -206,6 +212,7 @@ export function registerCanonicalTools(server, ctx) {
         seeking: z.array(z.string()).optional().describe("What they are looking for."),
         offering: z.array(z.string()).optional().describe("What they bring."),
         purposes: z.array(z.enum(PURPOSES)).optional().describe("Why they want to meet."),
+        event: EVENT_ID.optional().describe("Only when your person is at an event that gave out an event id. The card is then also listed on that event's public wall page, which anyone with the link can open, and people at the event can search within it. Tell your person this before they approve."),
         card_id: z.string().optional().describe("For renew and replace: the card to act on."),
         ...CONFIRM,
     }, async (a) => {
@@ -237,6 +244,7 @@ export function registerCanonicalTools(server, ctx) {
                         headline: fetched.card.headline ?? "",
                         approved_digest: renewDigest,
                         review: "This renews the card for another 21 days. Not one word of it changes, so there is nothing new to approve in it.",
+                        ...(fetched.card.event_ref?.event_id ? { event_wall: eventWallUrl(ctx, String(fetched.card.event_ref.event_id)) } : {}),
                         note: `Call again with confirm:true and approved_digest="${renewDigest}" once your person approves.`,
                     });
                 }
@@ -267,12 +275,19 @@ export function registerCanonicalTools(server, ctx) {
                 seeking: (a.seeking ?? []).map((s) => trimmed(s, "seeking")),
                 offering: (a.offering ?? []).map((s) => trimmed(s, "offering")),
                 intents: a.purposes ?? [],
+                // Present only when given, so a card without an event has exactly the approved
+                // content and digest it had in 5.0.x.
+                ...(a.event ? { event: a.event } : {}),
             };
             const digest = cardApprovalDigest(replacing ? "replace" : "publish", replacing ? a.card_id : null, card);
             if (!a.confirm) {
                 return ctx.asText({
                     step: "preview", action: replacing ? "replace" : "publish", approve_this_exactly: card, approved_digest: digest,
                     ...(replacing ? { replaces_card_id: a.card_id } : {}),
+                    ...(a.event ? {
+                        event_wall: eventWallUrl(ctx, a.event),
+                        event_note: "This card will also be listed on that public page, which anyone with the link can open. Tell your person this before they approve.",
+                    } : {}),
                     review: replacing
                         ? "This publishes this exact new version and takes the old card down in one step. It is what other people's agents will see and match on, in your person's own words."
                         : "This is what other people's agents will be able to see and match on. It is in your person's own words and Mingle does not rewrite it.",
@@ -290,7 +305,7 @@ export function registerCanonicalTools(server, ctx) {
                 return ctx.asText({ refused: true, error: r.error }, true);
             return replacing
                 ? ctx.asText({ replaced: true, card_id: r.new_card_id, superseded: r.superseded, expires_at: r.expires_at })
-                : ctx.asText({ published: true, card_id: r.card_id, expires_at: r.expires_at });
+                : ctx.asText({ published: true, card_id: r.card_id, expires_at: r.expires_at, ...(a.event ? { event_wall: eventWallUrl(ctx, a.event) } : {}) });
         }
         catch (e) {
             return ctx.asText({ refused: true, code: e.code ?? "error", error: e.message }, true);
@@ -301,6 +316,7 @@ export function registerCanonicalTools(server, ctx) {
         query: z.string().optional().describe("What your person is looking for, in their words."),
         purpose: z.enum(PURPOSES).optional(),
         limit: z.number().int().min(1).max(25).optional(),
+        event: EVENT_ID.optional().describe("An event id, to search only the cards published for that event."),
         assess: z.boolean().optional().describe("Opt in to sending selected network-visible fields from your card and up to three search results to OpenAI GPT-6 Astra for an advisory reciprocal-fit assessment. Requires my_card_id and configured API access. Never requests an intro."),
         my_card_id: z.string().max(160).optional().describe("Your published card, used only when assess:true."),
     }, async (a) => {
@@ -313,6 +329,8 @@ export function registerCanonicalTools(server, ctx) {
                 body: JSON.stringify({
                     ...(a.query ? { query: a.query } : {}),
                     ...(a.purpose ? { intents: [a.purpose] } : {}),
+                    // The route reads event_ref as the bare event id (v3-routes.ts search body).
+                    ...(a.event ? { event_ref: a.event } : {}),
                     limit: a.limit ?? 10,
                 }),
             });
@@ -837,6 +855,7 @@ async function buildSealedCard(ctx, approved) {
         intents: approved.intents ?? [],
         seeking: (approved.seeking ?? []).map(d => ({ description: d })),
         offering: (approved.offering ?? []).map(d => ({ description: d })),
+        ...(approved.event ? { event_ref: { event_id: approved.event } } : {}),
         skill_version: ctx.skillVersion,
     };
     return v3.sealCard(v3.buildCard(args), ctx.keys.privateKey);

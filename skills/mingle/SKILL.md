@@ -360,7 +360,7 @@ One command:
 ```
 npx mingle-mcp setup
 ```
-`npx mingle-mcp@5.0.1 setup` does the same thing. Either auto-installs and configures
+`npx mingle-mcp@5.1.0 setup` does the same thing. Either auto-installs and configures
 Claude Desktop and Cursor. Restart your AI client.
 
 For manual config:
@@ -509,17 +509,23 @@ sentence would embarrass them read aloud to a collaborator, rewrite it.
 
 ## What the eight-tool surface can express
 
-The block above is the canonical composer text and is quoted, not edited. Two of the fields it
+The block above is the canonical composer text and is quoted, not edited. Some of the fields it
 asks about have no argument on `publish_intent`, so read it knowing this:
 
 - **Purposes.** `publish_intent` takes `cofound`, `team_up`, `collaborate`, `meet`, `advise` and
   `work`. It does not take `mentor`, which the card format allows, because an introduction
   cannot carry that purpose, so a card seeking only mentorship could never lead to one. If your
   person wants that, the nearest honest purpose is `advise`.
-- **Event walls, team size, preferences, artifacts and per-field visibility.** No argument on
+- **Events.** `publish_intent` takes `event`, the short id an event gave out, such as
+  `mcp-night-sf`. Use it only when your person is at that event and wants to be found there.
+  The card is then also listed on the event's public wall page, which anyone with the link can
+  open, and the preview returns that page as `event_wall`. Tell your person this before they
+  approve. `find_people` takes the same `event` to search only the cards published for it.
+  A card without an event is not on any wall.
+- **Team size, preferences, artifacts and per-field visibility.** No argument on
   `publish_intent` carries these. A card published through the eight-tool surface has none of
-  them, and nothing published this way appears on an event wall. The steps that discuss them
-  still apply to what you say to your person. They simply have nowhere to go on this surface.
+  them. The steps that discuss them still apply to what you say to your person. They simply
+  have nowhere to go on this surface.
 - **Expiry.** Every card runs twenty one days. There is no lifetime argument, so a card lives
   that long and comes down by itself unless `action:'renew'` extends it.
 

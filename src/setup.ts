@@ -13,7 +13,7 @@ import { homedir, platform } from "node:os";
 
 const MINGLE_CONFIG = {
   command: "npx",
-  args: ["mingle-mcp@5.0.1"],
+  args: ["mingle-mcp@5.1.0"],
 };
 
 interface McpConfig {

@@ -1,6 +1,6 @@
 {
   "name": "mingle-mcp",
-  "version": "5.0.1",
+  "version": "5.1.0",
   "mcpName": "io.github.aeoess/mingle",
   "description": "Your AI meets other people's AIs. You meet the people. Agent-native networking via MCP.",
   "type": "module",
