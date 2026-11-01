@@ -18,6 +18,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import { sign, canonicalize } from "agent-passport-system";
+import { readOwnCard } from "./owner-read.js";
 import { createHash, randomUUID } from "node:crypto";
 import { loadIdentity, loadPreferences, cacheCard, clearCachedCard, classifyMatches, recordSurfaced } from "./identity.js";
 import { buildCard, cardContentHash, sealCard, explainVisibility, trackV3Card, listV3Cards, getLastCheck, setLastCheck, getBackgroundChecks, backgroundChecksAllowed, setBackgroundChecks, type BuildCardArgs } from "./v3.js";
@@ -898,7 +899,7 @@ server.tool(
   },
   async (a) => {
     try {
-      const fetched = await api(`/api/v3/cards/${a.card_id}`);
+      const fetched = await readOwnCard(api, sign, keys, a.card_id);
       if (fetched.error || !fetched.card) return { content: [{ type: "text" as const, text: `Card not found: ${a.card_id}` }], isError: true };
       if (fetched.card.subject_key !== keys.publicKey) return { content: [{ type: "text" as const, text: "That card is not yours to renew." }], isError: true };
       if (fetched.revocation_status !== "active") return { content: [{ type: "text" as const, text: `Only an active card can be renewed (this one is ${fetched.revocation_status}).` }], isError: true };
