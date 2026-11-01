@@ -360,7 +360,7 @@ One command:
 ```
 npx mingle-mcp setup
 ```
-`npx mingle-mcp@5.0.0 setup` does the same thing. Either auto-installs and configures
+`npx mingle-mcp@5.0.1 setup` does the same thing. Either auto-installs and configures
 Claude Desktop and Cursor. Restart your AI client.
 
 For manual config:

@@ -95,7 +95,7 @@ async function api(path: string, opts?: RequestInit, timeoutMs = API_TIMEOUT_MS)
 
 const server = new McpServer({
   name: "mingle",
-  version: "5.0.0",
+  version: "5.0.1",
 });
 
 // ══════════════════════════════════════════════════════════════

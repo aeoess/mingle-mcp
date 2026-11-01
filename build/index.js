@@ -17,6 +17,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import { sign, canonicalize } from "agent-passport-system";
+import { readOwnCard } from "./owner-read.js";
 import { createHash, randomUUID } from "node:crypto";
 import { loadIdentity, loadPreferences, cacheCard, clearCachedCard, classifyMatches, recordSurfaced } from "./identity.js";
 import { buildCard, cardContentHash, sealCard, explainVisibility, trackV3Card, listV3Cards, getLastCheck, setLastCheck, getBackgroundChecks, backgroundChecksAllowed, setBackgroundChecks } from "./v3.js";
@@ -84,7 +85,7 @@ async function api(path, opts, timeoutMs = API_TIMEOUT_MS) {
 }
 const server = new McpServer({
     name: "mingle",
-    version: "5.0.0",
+    version: "5.0.1",
 });
 // ══════════════════════════════════════════════════════════════
 // The registration gate
@@ -779,9 +780,9 @@ server.tool("renew_card", "Renew one of your Mingle v3 cards before it expires: 
     confirm: z.boolean().optional().describe("Set true to perform the renewal"),
 }, async (a) => {
     try {
-        const fetched = await api(`/api/v3/cards/${a.card_id}`);
+        const fetched = await readOwnCard(apiRaw, api, sign, keys, a.card_id);
         if (fetched.error || !fetched.card)
-            return { content: [{ type: "text", text: `Card not found: ${a.card_id}` }], isError: true };
+            return { content: [{ type: "text", text: fetched.error ? `Cannot renew: ${fetched.error}` : `Card not found: ${a.card_id}` }], isError: true };
         if (fetched.card.subject_key !== keys.publicKey)
             return { content: [{ type: "text", text: "That card is not yours to renew." }], isError: true };
         if (fetched.revocation_status !== "active")

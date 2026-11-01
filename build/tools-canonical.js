@@ -28,6 +28,7 @@ import { createHash } from "node:crypto";
 import { z } from "zod";
 import * as canon from "./canonical.js";
 import { assessPeople } from "./assessment.js";
+import { readOwnCard } from "./owner-read.js";
 export const CANONICAL_TOOL_NAMES = [
     "publish_intent",
     "find_people",
@@ -216,9 +217,10 @@ export function registerCanonicalTools(server, ctx) {
             if (a.action === "renew") {
                 if (!a.card_id)
                     return ctx.asText({ refused: true, error: "action:'renew' needs card_id." }, true);
-                const fetched = await ctx.api(`/api/v3/cards/${encodeURIComponent(a.card_id)}`);
+                // The full card, not the public projection, so withheld fields survive the reseal.
+                const fetched = await readOwnCard(ctx.apiRaw, ctx.api, ctx.sign, ctx.keys, a.card_id);
                 if (fetched.error || !fetched.card)
-                    return ctx.asText({ refused: true, error: `no card ${a.card_id}` }, true);
+                    return ctx.asText({ refused: true, error: fetched.error ? String(fetched.error) : `no card ${a.card_id}` }, true);
                 if (fetched.card.subject_key !== ctx.keys.publicKey) {
                     return ctx.asText({ refused: true, error: "that card belongs to someone else" }, true);
                 }
@@ -321,6 +323,8 @@ export function registerCanonicalTools(server, ctx) {
                 assessment = { status: "unavailable", reason: "my_card_id_required" };
                 if (a.my_card_id) {
                     try {
+                        // The public projection on purpose: assessment sends this card to an outside
+                        // model, so fields the person withheld from the network stay out of it.
                         const own = await ctx.api(`/api/v3/cards/${encodeURIComponent(a.my_card_id)}`);
                         if (!own.card || own.card.subject_key !== ctx.keys.publicKey || own.revocation_status !== "active" || !(Date.parse(own.expires_at) > Date.now())) {
                             assessment = { status: "unavailable", reason: "active_owned_card_required" };
