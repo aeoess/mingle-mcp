@@ -1,0 +1,80 @@
+name: Tests
+
+# Type-check and the test suite on every pull request and every push to main.
+# The end to end job runs the suite against a checkout of the Mingle API, the
+# way a contributor runs it locally. It starts from an empty model cache, so it
+# also exercises the cold cache path the suite waits out.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Type-check and tests (Node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['22', '24']
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1  # v7.1.0
+        with:
+          node-version: ${{ matrix.node }}
+          package-manager-cache: false
+
+      - name: Install
+        run: npm ci
+
+      - name: Type-check
+        run: npx tsc --noEmit
+
+      - name: Tests (the end to end file skips without an API checkout)
+        run: npm test
+
+  e2e:
+    name: End to end against the Mingle API
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Check out the API
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          repository: aeoess/intent-network-api
+          ref: main
+          path: intent-network-api
+          persist-credentials: false
+
+      - name: Set up Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1  # v7.1.0
+        with:
+          node-version: '22'
+          package-manager-cache: false
+
+      - name: Install
+        run: |
+          npm ci
+          npm ci --prefix intent-network-api
+
+      - name: End to end suite
+        env:
+          MINGLE_API_REPO: ${{ github.workspace }}/intent-network-api
+        run: npx tsx --test test/e2e-two-principals.test.ts
