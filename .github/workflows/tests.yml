@@ -42,7 +42,11 @@ jobs:
       - name: Type-check
         run: npx tsc --noEmit
 
-      - name: Tests (the end to end file skips without an API checkout)
+      # The pretest guard refuses a silent skip of the end to end file. It is
+      # skipped on purpose here because the e2e job below runs it.
+      - name: Tests (end to end runs in its own job)
+        env:
+          MINGLE_E2E_SKIP_OK: '1'
         run: npm test
 
   e2e:
