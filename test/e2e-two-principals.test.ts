@@ -86,6 +86,9 @@ async function startApi(): Promise<string> {
   // because the server it reached had a stamped cutoff, and the next run passed. A test that
   // can silently talk to the wrong server passes and fails for reasons unrelated to the code.
   apiOut = "";
+  apiExit = undefined;
+  apiProc.on("exit", code => { apiExit = code; });
+  let listenTimer: ReturnType<typeof setTimeout> | undefined;
   const listening = new Promise<void>((resolve, reject) => {
     // The listener stays attached after the server is up. waitForModel reads the same
     // output for the line the server prints when the embedding model has loaded.
@@ -96,9 +99,10 @@ async function startApi(): Promise<string> {
     apiProc!.stdout?.on("data", onData);
     apiProc!.stderr?.on("data", onData);
     apiProc!.on("exit", code => reject(new Error(`the API exited with code ${code} before it listened. Its output:\n${apiOut}`)));
-    setTimeout(() => reject(new Error(`the API did not announce itself on port ${port} in 60s. Its output:\n${apiOut}`)), 60000);
+    listenTimer = setTimeout(() => reject(new Error(`the API did not announce itself on port ${port} in 60s. Its output:\n${apiOut}`)), 60000);
   });
-  await listening;
+  // Cleared once the server is up, so a run that fails later is not held open for a minute.
+  await listening.finally(() => clearTimeout(listenTimer));
 
   // And the server that answers is the one this test configured. Checked before any test runs,
   // so a hijacked port or an inherited variable is a loud failure here rather than a confusing
@@ -163,7 +167,20 @@ let apiOut = "";
 /** How long a search waits for the API to load its embedding model. A warm cache loads in
  *  about a second. A cold one downloads the model first, which took most of a minute on a
  *  home connection, so the default leaves room for a slow CI runner. */
-const MODEL_WAIT_MS = Number(process.env.MINGLE_E2E_MODEL_WAIT_MS ?? 180_000);
+const MODEL_WAIT_MS = (() => {
+  const raw = process.env.MINGLE_E2E_MODEL_WAIT_MS;
+  if (raw === undefined || raw === "") return 180_000;
+  const n = Number(raw);
+  // A value that is not a positive number would make the deadline NaN, and a NaN deadline
+  // never passes, so the wait would never end.
+  if (!Number.isFinite(n) || n <= 0) {
+    throw new Error(`MINGLE_E2E_MODEL_WAIT_MS must be a positive number of milliseconds, got ${JSON.stringify(raw)}`);
+  }
+  return n;
+})();
+
+/** The API child's exit code once it has exited, so a wait can stop at once. */
+let apiExit: number | null | undefined;
 
 /** Wait until the API says its embedding model has loaded.
  *
@@ -180,13 +197,16 @@ async function waitForModel(): Promise<void> {
   const deadline = Date.now() + MODEL_WAIT_MS;
   for (;;) {
     if (apiOut.includes("[embeddings] Model ready")) return;
+    if (apiExit !== undefined) {
+      throw new Error(`the API exited with code ${apiExit} before its embedding model was ready. Its output:\n${apiOut}`);
+    }
     const failed = /\[embeddings\] Warmup failed:.*/.exec(apiOut);
     if (failed) throw new Error(`the API could not load its embedding model: ${failed[0]}`);
     if (Date.now() > deadline) {
       throw new Error(
-        `the API did not load its embedding model within ${MODEL_WAIT_MS}ms. On a first run the model ` +
-        `is downloaded into the API repo's model cache, so this is a cold cache or no network, ` +
-        `not a failure of the code under test. Set MINGLE_E2E_MODEL_WAIT_MS to wait longer.`,
+        `the API's embedding model did not become ready within ${MODEL_WAIT_MS}ms. This does not say ` +
+        `why. A first run downloads the model, so a cold cache, a slow or missing network and a ` +
+        `stalled load all look the same here. Set MINGLE_E2E_MODEL_WAIT_MS to wait longer.`,
       );
     }
     await new Promise(r => setTimeout(r, 250));
