@@ -16,6 +16,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
+import { keepClosedObjects } from "./zod3-compat.js";
 import { sign, canonicalize } from "agent-passport-system";
 import { readOwnCard } from "./owner-read.js";
 import { createHash, randomUUID } from "node:crypto";
@@ -108,7 +109,17 @@ const server = new McpServer({
 const LEGACY_TOOLS_ENABLED = process.env.MINGLE_LEGACY_TOOLS === "1";
 const CANONICAL_NAMES = new Set(CANONICAL_TOOL_NAMES);
 let registeringCanonical = false;
-const registerRawTool = server.tool.bind(server);
+const registerToolOnServer = server.tool.bind(server);
+// Every registration passes through here, so this is also the one place that keeps the
+// advertised input schema as zod 3 published it (see zod3-compat.ts). A tool with an empty
+// shape is left alone, because the SDK already built that one with zod 4 under zod 3 too, and
+// it was published without additionalProperties.
+const registerRawTool = (...a) => {
+    const registered = registerToolOnServer(...a);
+    if (Object.keys(registered?.inputSchema?._zod?.def?.shape ?? {}).length)
+        keepClosedObjects(registered.inputSchema);
+    return registered;
+};
 server.tool = (name, ...rest) => {
     if (registeringCanonical)
         return registerRawTool(name, ...rest);
@@ -469,7 +480,7 @@ const composeShape = {
     artifacts: z.array(evidenceSchema).optional(),
     event_ref: z.object({ event_id: z.string(), dates: z.string().optional() }).optional(),
     team_size_sought: z.number().int().min(1).max(100).optional(),
-    visibility: z.record(z.enum(["private", "network", "intro_request", "mutual_intro", "thread_only"])).optional().describe("Per-field audience; unlisted content fields default to network"),
+    visibility: z.record(z.string(), z.enum(["private", "network", "intro_request", "mutual_intro", "thread_only"])).optional().describe("Per-field audience; unlisted content fields default to network"),
     ttl_days: z.number().int().min(1).max(60).optional().describe("Days until auto-expiry (default 21)"),
 };
 function argsToCard(cardType, a) {
@@ -495,7 +506,7 @@ for (const cardType of ["connection", "opportunity"]) {
                         note: `To publish, call publish_${cardType}_card with this exact card and approved_hash="${card_hash}". To update one of your live cards instead, call replace_card with that card's card_id, this exact card and the same approved_hash. Any edit changes the hash and needs re-approval.`,
                     }, null, 2) }] };
     });
-    server.tool(`publish_${cardType}_card`, `Step 2 of publishing. Publish the ${cardType} card the principal approved in compose_${cardType}_card. Requires the exact card object and the approved_hash returned by compose; a mismatch is refused so only approved content is published.`, { card: z.any().describe("The exact card object returned by compose"), approved_hash: z.string().describe("The card_hash the principal approved") }, async (a) => {
+    server.tool(`publish_${cardType}_card`, `Step 2 of publishing. Publish the ${cardType} card the principal approved in compose_${cardType}_card. Requires the exact card object and the approved_hash returned by compose; a mismatch is refused so only approved content is published.`, { card: z.any().optional().describe("The exact card object returned by compose"), approved_hash: z.string().describe("The card_hash the principal approved") }, async (a) => {
         try {
             const card = a.card;
             if (!card || card.card_type !== cardType)
@@ -519,7 +530,7 @@ for (const cardType of ["connection", "opportunity"]) {
 // ── replace_card: update a live card, the old version superseded in the same step ──
 server.tool("replace_card", "Update one of your live Mingle v3 cards. Compose the new version with compose_connection_card or compose_opportunity_card and show it to the principal. Once they approve it, call replace_card with the card_id being replaced, the exact card returned by compose and its card_hash as approved_hash. The new card goes live and the old one is marked superseded in the same step, so an update never leaves the old version live beside the new one. A card edited after approval is refused, so only approved content is published. Only an active card you own can be replaced.", {
     card_id: z.string().describe("The card_id of your live card that the new version replaces"),
-    card: z.any().describe("The exact card object returned by compose"),
+    card: z.any().optional().describe("The exact card object returned by compose"),
     approved_hash: z.string().describe("The card_hash the principal approved"),
 }, async (a) => {
     try {
@@ -1358,7 +1369,7 @@ function fitPolicyHash(dimensions) {
 }
 const DIM = z.object({
     dimension: z.string(),
-    value: z.any(),
+    value: z.any().optional(),
     sensitivity: z.enum(["low", "moderate", "high"]),
     disclosure_state: z.enum(["local_only", "testable", "reveal_overlap", "reveal_bucket", "reveal_exact"]),
     allowed_intents: z.array(z.enum(["cofound", "team_up", "collaborate", "meet", "advise"])).min(1),

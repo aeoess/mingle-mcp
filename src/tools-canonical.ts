@@ -591,7 +591,7 @@ export function registerCanonicalTools(server: any, ctx: ToolContext): void {
       action: z.enum(["share_contact", "withdraw_contact", "propose_plan", "approve_plan"]),
       contact: z.string().optional().describe("For share_contact: the one line the other person will receive."),
       salt: z.string().optional().describe("For share_contact: from the preview. Pass it back with confirm."),
-      plan: z.record(z.any()).optional().describe("For propose_plan: purpose, next_action, meeting_length, agenda, each_wants, boundaries, expiry."),
+      plan: z.record(z.string(), z.any()).optional().describe("For propose_plan: purpose, next_action, meeting_length, agenda, each_wants, boundaries, expiry."),
       ...CONFIRM,
     },
     async (a: any) => {
