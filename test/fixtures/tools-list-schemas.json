@@ -1,0 +1,2383 @@
+{
+  "default": [
+    {
+      "name": "publish_intent",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "default": "publish",
+            "type": "string",
+            "enum": [
+              "publish",
+              "renew",
+              "replace"
+            ]
+          },
+          "headline": {
+            "description": "One line in your person's own words.",
+            "type": "string"
+          },
+          "seeking": {
+            "description": "What they are looking for.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "offering": {
+            "description": "What they bring.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "purposes": {
+            "description": "Why they want to meet.",
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "cofound",
+                "team_up",
+                "collaborate",
+                "meet",
+                "advise",
+                "work"
+              ]
+            }
+          },
+          "event": {
+            "description": "Only when your person is at an event that gave out an event id. The card is then also listed on that event's public wall page, which anyone with the link can open, and people at the event can search within it. Tell your person this before they approve.",
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]{0,63}$"
+          },
+          "card_id": {
+            "description": "For renew and replace: the card to act on.",
+            "type": "string"
+          },
+          "confirm": {
+            "description": "Send it. Requires approved_digest from the preview.",
+            "type": "boolean"
+          },
+          "approved_digest": {
+            "description": "The approved_digest the preview returned, after the principal approved that exact content.",
+            "type": "string"
+          }
+        },
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "find_people",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "description": "What your person is looking for, in their words.",
+            "type": "string"
+          },
+          "purpose": {
+            "type": "string",
+            "enum": [
+              "cofound",
+              "team_up",
+              "collaborate",
+              "meet",
+              "advise",
+              "work"
+            ]
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 25
+          },
+          "event": {
+            "description": "An event id, to search only the cards published for that event.",
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]{0,63}$"
+          },
+          "assess": {
+            "description": "Opt in to sending selected network-visible fields from your card and up to three search results to OpenAI GPT-6 Astra for an advisory reciprocal-fit assessment. Requires my_card_id and configured API access. Never requests an intro.",
+            "type": "boolean"
+          },
+          "my_card_id": {
+            "description": "Your published card, used only when assess:true.",
+            "type": "string",
+            "maxLength": 160
+          }
+        },
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "mingle_inbox",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "include_finished": {
+            "description": "Also list connections that are already made or closed.",
+            "type": "boolean"
+          }
+        },
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "request_intro",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "to_card_id": {
+            "type": "string",
+            "description": "The card of the person to be introduced to."
+          },
+          "from_card_id": {
+            "type": "string",
+            "description": "Your person's own card."
+          },
+          "purpose": {
+            "type": "string",
+            "enum": [
+              "cofound",
+              "team_up",
+              "collaborate",
+              "meet",
+              "advise",
+              "work"
+            ]
+          },
+          "note": {
+            "type": "string",
+            "description": "Why, in your person's own words. The other person reads this."
+          },
+          "request_id": {
+            "description": "From the preview. Pass it back with confirm so a retry cannot create two introductions.",
+            "type": "string"
+          },
+          "confirm": {
+            "description": "Send it. Requires approved_digest from the preview.",
+            "type": "boolean"
+          },
+          "approved_digest": {
+            "description": "The approved_digest the preview returned, after the principal approved that exact content.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "to_card_id",
+          "from_card_id",
+          "purpose",
+          "note"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "respond_intro",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "intro_id": {
+            "type": "string"
+          },
+          "answer": {
+            "type": "string",
+            "enum": [
+              "interested",
+              "not_now",
+              "not_now_and_block"
+            ]
+          },
+          "confirm": {
+            "description": "Send it. Requires approved_digest from the preview.",
+            "type": "boolean"
+          },
+          "approved_digest": {
+            "description": "The approved_digest the preview returned, after the principal approved that exact content.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "intro_id",
+          "answer"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "continue_connection",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "intro_id": {
+            "type": "string"
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "share_contact",
+              "withdraw_contact",
+              "propose_plan",
+              "approve_plan"
+            ]
+          },
+          "contact": {
+            "description": "For share_contact: the one line the other person will receive.",
+            "type": "string"
+          },
+          "salt": {
+            "description": "For share_contact: from the preview. Pass it back with confirm.",
+            "type": "string"
+          },
+          "plan": {
+            "description": "For propose_plan: purpose, next_action, meeting_length, agenda, each_wants, boundaries, expiry.",
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {}
+          },
+          "confirm": {
+            "description": "Send it. Requires approved_digest from the preview.",
+            "type": "boolean"
+          },
+          "approved_digest": {
+            "description": "The approved_digest the preview returned, after the principal approved that exact content.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "intro_id",
+          "action"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "manage_intent",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "withdraw_request",
+              "withdraw_interest",
+              "block_pair",
+              "take_card_down"
+            ]
+          },
+          "intro_id": {
+            "type": "string"
+          },
+          "card_id": {
+            "type": "string"
+          },
+          "confirm": {
+            "description": "Send it. Requires approved_digest from the preview.",
+            "type": "boolean"
+          },
+          "approved_digest": {
+            "description": "The approved_digest the preview returned, after the principal approved that exact content.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "action"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "mingle_settings",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "show",
+              "set_email",
+              "stop_email",
+              "background_checks"
+            ]
+          },
+          "email": {
+            "type": "string"
+          },
+          "enabled": {
+            "description": "For background_checks.",
+            "type": "boolean"
+          },
+          "confirm": {
+            "description": "Send it. Requires approved_digest from the preview.",
+            "type": "boolean"
+          },
+          "approved_digest": {
+            "description": "The approved_digest the preview returned, after the principal approved that exact content.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "action"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
+      }
+    }
+  ],
+  "legacy": [
+    {
+      "name": "publish_intent_card",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Your name or alias"
+          },
+          "topic": {
+            "description": "What you're working on (short summary)",
+            "type": "string"
+          },
+          "needs": {
+            "description": "What you're looking for (plain text list)",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "offers": {
+            "description": "What you can provide (plain text list)",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "context": {
+            "description": "Rich context for better matching. Private, and never shown to anyone else.",
+            "type": "string"
+          },
+          "open_to": {
+            "description": "Open to (e.g. 'introductions', 'partnerships')",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "hours": {
+            "default": 48,
+            "description": "Hours until card expires (default 48)",
+            "type": "number"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "search_matches",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "min_score": {
+            "description": "Minimum relevance score 0-1 (default: 0.3)",
+            "type": "number"
+          },
+          "max_results": {
+            "description": "Max results (default: 15)",
+            "type": "number"
+          },
+          "query_needs": {
+            "description": "Ghost mode: describe what you need without a published card",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "query_offers": {
+            "description": "Ghost mode: describe what you offer without a published card",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "get_digest",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      }
+    },
+    {
+      "name": "request_intro_legacy",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "match_id": {
+            "type": "string",
+            "description": "Match ID from search_matches"
+          },
+          "to": {
+            "type": "string",
+            "description": "Agent ID of the person you want to meet"
+          },
+          "message": {
+            "type": "string",
+            "description": "Short message explaining why this intro would be valuable"
+          }
+        },
+        "required": [
+          "match_id",
+          "to",
+          "message"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "respond_to_intro",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "intro_id": {
+            "type": "string",
+            "description": "Intro ID from your digest"
+          },
+          "approve": {
+            "type": "boolean",
+            "description": "true to approve, false to decline"
+          },
+          "message": {
+            "description": "Optional response message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "intro_id",
+          "approve"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "remove_intent_card",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "card_id": {
+            "type": "string",
+            "description": "Card ID to remove"
+          }
+        },
+        "required": [
+          "card_id"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "rate_connection",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "intro_id": {
+            "type": "string",
+            "description": "Intro ID of the connection to rate"
+          },
+          "rating": {
+            "type": "string",
+            "enum": [
+              "useful",
+              "neutral",
+              "not_useful"
+            ],
+            "description": "How useful was this connection?"
+          },
+          "comment": {
+            "description": "Optional: brief note on why",
+            "type": "string"
+          }
+        },
+        "required": [
+          "intro_id",
+          "rating"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "compose_connection_card",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "headline": {
+            "type": "string",
+            "description": "Headline in the principal's voice"
+          },
+          "intents": {
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "meet",
+                "collaborate",
+                "team_up",
+                "work",
+                "advise",
+                "mentor",
+                "cofound"
+              ]
+            }
+          },
+          "seeking": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "description": {
+                  "type": "string"
+                },
+                "topics": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "engagement": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "description"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "offering": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "description": {
+                  "type": "string"
+                },
+                "topics": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "required": [
+                "description"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "preferences": {
+            "description": "Explicit self-declared values only, never inferred traits",
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "key": {
+                  "type": "string"
+                },
+                "value": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "key",
+                "value"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "artifacts": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "claim": {
+                  "type": "string",
+                  "description": "The exact claim this evidence supports"
+                },
+                "source": {
+                  "type": "string",
+                  "enum": [
+                    "principal_statement",
+                    "artifact_link",
+                    "subject_binding",
+                    "third_party_attestation"
+                  ]
+                },
+                "method": {
+                  "type": "string",
+                  "description": "How it was checked, in plain words"
+                },
+                "verified_fact": {
+                  "type": "string",
+                  "description": "Precisely what is verified now, no more"
+                },
+                "date": {
+                  "type": "string",
+                  "description": "ISO date"
+                }
+              },
+              "required": [
+                "claim",
+                "source",
+                "method",
+                "verified_fact",
+                "date"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "event_ref": {
+            "type": "object",
+            "properties": {
+              "event_id": {
+                "type": "string"
+              },
+              "dates": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "event_id"
+            ],
+            "additionalProperties": false
+          },
+          "team_size_sought": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          },
+          "visibility": {
+            "description": "Per-field audience; unlisted content fields default to network",
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {
+              "type": "string",
+              "enum": [
+                "private",
+                "network",
+                "intro_request",
+                "mutual_intro",
+                "thread_only"
+              ]
+            }
+          },
+          "ttl_days": {
+            "description": "Days until auto-expiry (default 21)",
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 60
+          }
+        },
+        "required": [
+          "headline",
+          "intents"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "publish_connection_card",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "card": {
+            "description": "The exact card object returned by compose"
+          },
+          "approved_hash": {
+            "type": "string",
+            "description": "The card_hash the principal approved"
+          }
+        },
+        "required": [
+          "approved_hash"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "compose_opportunity_card",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "headline": {
+            "type": "string",
+            "description": "Headline in the principal's voice"
+          },
+          "intents": {
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "meet",
+                "collaborate",
+                "team_up",
+                "work",
+                "advise",
+                "mentor",
+                "cofound"
+              ]
+            }
+          },
+          "seeking": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "description": {
+                  "type": "string"
+                },
+                "topics": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "engagement": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "description"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "offering": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "description": {
+                  "type": "string"
+                },
+                "topics": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "required": [
+                "description"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "preferences": {
+            "description": "Explicit self-declared values only, never inferred traits",
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "key": {
+                  "type": "string"
+                },
+                "value": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "key",
+                "value"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "artifacts": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "claim": {
+                  "type": "string",
+                  "description": "The exact claim this evidence supports"
+                },
+                "source": {
+                  "type": "string",
+                  "enum": [
+                    "principal_statement",
+                    "artifact_link",
+                    "subject_binding",
+                    "third_party_attestation"
+                  ]
+                },
+                "method": {
+                  "type": "string",
+                  "description": "How it was checked, in plain words"
+                },
+                "verified_fact": {
+                  "type": "string",
+                  "description": "Precisely what is verified now, no more"
+                },
+                "date": {
+                  "type": "string",
+                  "description": "ISO date"
+                }
+              },
+              "required": [
+                "claim",
+                "source",
+                "method",
+                "verified_fact",
+                "date"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "event_ref": {
+            "type": "object",
+            "properties": {
+              "event_id": {
+                "type": "string"
+              },
+              "dates": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "event_id"
+            ],
+            "additionalProperties": false
+          },
+          "team_size_sought": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          },
+          "visibility": {
+            "description": "Per-field audience; unlisted content fields default to network",
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {
+              "type": "string",
+              "enum": [
+                "private",
+                "network",
+                "intro_request",
+                "mutual_intro",
+                "thread_only"
+              ]
+            }
+          },
+          "ttl_days": {
+            "description": "Days until auto-expiry (default 21)",
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 60
+          }
+        },
+        "required": [
+          "headline",
+          "intents"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "publish_opportunity_card",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "card": {
+            "description": "The exact card object returned by compose"
+          },
+          "approved_hash": {
+            "type": "string",
+            "description": "The card_hash the principal approved"
+          }
+        },
+        "required": [
+          "approved_hash"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "replace_card",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "card_id": {
+            "type": "string",
+            "description": "The card_id of your live card that the new version replaces"
+          },
+          "card": {
+            "description": "The exact card object returned by compose"
+          },
+          "approved_hash": {
+            "type": "string",
+            "description": "The card_hash the principal approved"
+          }
+        },
+        "required": [
+          "card_id",
+          "approved_hash"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "search_cards",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "description": "Free-text query for semantic ranking over published text",
+            "type": "string"
+          },
+          "card_type": {
+            "type": "string",
+            "enum": [
+              "connection",
+              "opportunity"
+            ]
+          },
+          "intents": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "topics": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "engagement": {
+            "type": "string"
+          },
+          "location": {
+            "type": "string"
+          },
+          "event_ref": {
+            "type": "string"
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 50
+          }
+        },
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "withdraw_card",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "card_id": {
+            "type": "string",
+            "description": "The v3 card_id to act on"
+          }
+        },
+        "required": [
+          "card_id"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "supersede_claims",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "card_id": {
+            "type": "string",
+            "description": "The v3 card_id to act on"
+          }
+        },
+        "required": [
+          "card_id"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "revoke_agent_authority",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "card_id": {
+            "type": "string",
+            "description": "The v3 card_id to act on"
+          }
+        },
+        "required": [
+          "card_id"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "delete_server_copy",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "card_id": {
+            "type": "string",
+            "description": "The v3 card_id to act on"
+          }
+        },
+        "required": [
+          "card_id"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "stop_new_matches",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "card_id": {
+            "type": "string",
+            "description": "The v3 card_id to act on"
+          }
+        },
+        "required": [
+          "card_id"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "request_counterparty_deletion",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "card_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "card_id"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "set_background_checks",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "description": "true only if the principal said yes in this conversation"
+          },
+          "note": {
+            "description": "Optional: the principal's own words about the choice, stored verbatim",
+            "type": "string",
+            "maxLength": 200
+          }
+        },
+        "required": [
+          "enabled"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "get_card_status",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "pulse": {
+            "description": "Set true ONLY for the automatic session-start check. With it set, the call is refused without a network request unless the principal turned background checks on. Omit it when the principal asked.",
+            "type": "boolean"
+          }
+        },
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "renew_card",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "card_id": {
+            "type": "string",
+            "description": "The card_id to renew (one of your active cards)"
+          },
+          "ttl_days": {
+            "description": "Days until the renewed card expires (default 21)",
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 60
+          },
+          "confirm": {
+            "description": "Set true to perform the renewal",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "card_id"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "set_notifications",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "description": "Email to receive notifications; you will get a confirmation link",
+            "type": "string",
+            "format": "email",
+            "pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+          },
+          "off": {
+            "description": "true to unsubscribe and delete your stored email",
+            "type": "boolean"
+          },
+          "prefs": {
+            "description": "Only the prefs the principal named. intro_request and intro_accepted start on, weekly_digest and new_match start off, and an omitted pref keeps its stored value",
+            "type": "object",
+            "properties": {
+              "intro_request": {
+                "type": "boolean"
+              },
+              "intro_accepted": {
+                "type": "boolean"
+              },
+              "weekly_digest": {
+                "type": "boolean"
+              },
+              "new_match": {
+                "type": "boolean"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "request_intro_v3",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "to_card_id": {
+            "type": "string",
+            "description": "The card_id to request an intro to (from search_cards)"
+          },
+          "purpose": {
+            "type": "string",
+            "enum": [
+              "collaborate",
+              "team_up",
+              "work",
+              "advise",
+              "cofound",
+              "meet"
+            ],
+            "description": "Why you want the intro"
+          },
+          "note": {
+            "description": "Short note to the other side (max 200 chars; links are stripped by the server)",
+            "type": "string",
+            "maxLength": 200
+          },
+          "from_card_id": {
+            "description": "Which of your published cards to send from; defaults to your most recent",
+            "type": "string"
+          },
+          "confirm": {
+            "description": "Set true only after the principal approved the preview",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "to_card_id",
+          "purpose"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "list_intros",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      }
+    },
+    {
+      "name": "check_pending_matches",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "include_all": {
+            "description": "Set true only when the principal asked to see everything; otherwise suggest_one carries the single match to mention.",
+            "type": "boolean"
+          },
+          "pulse": {
+            "description": "Set true ONLY for the automatic session-start check. With it set, the call is refused without a network request unless the principal turned background checks on. Omit it when the principal asked.",
+            "type": "boolean"
+          }
+        },
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "respond_intro_legacy",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "The intro id from list_intros"
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "accept",
+              "decline",
+              "decline_and_block"
+            ]
+          },
+          "contact": {
+            "description": "For accept only: the exact contact line to release (email, handle, or link). The principal must approve this exact text.",
+            "type": "string",
+            "maxLength": 200
+          },
+          "confirm": {
+            "description": "For accept: set true only after the principal approved the exact contact line",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "action"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "complete_intro",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "The intro id from list_intros (an outgoing, accepted intro)"
+          },
+          "contact": {
+            "type": "string",
+            "maxLength": 200,
+            "description": "The exact contact line to release; the principal must approve this exact text"
+          },
+          "confirm": {
+            "description": "Set true only after the principal approved the exact contact line",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "contact"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "set_disclosures",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "minItems": 1,
+            "maxItems": 20,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "maxLength": 200
+            },
+            "description": "The exact disclosure statements (each <=200 chars)"
+          },
+          "card_id": {
+            "description": "Which of your cards this ledger belongs to; defaults to your most recent",
+            "type": "string"
+          },
+          "confirm": {
+            "description": "Set true to approve and store this exact set",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "get_fit_exchange",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "exchange_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "exchange_id"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "answer_fit",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "exchange_id": {
+            "type": "string"
+          },
+          "answers": {
+            "description": "Omit to fetch the drafting context; include to preview/submit",
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "question_id": {
+                  "type": "string"
+                },
+                "mode": {
+                  "type": "string",
+                  "enum": [
+                    "ledger",
+                    "drafted",
+                    "skip"
+                  ]
+                },
+                "ledger_id": {
+                  "type": "string"
+                },
+                "text": {
+                  "type": "string",
+                  "maxLength": 800
+                }
+              },
+              "required": [
+                "question_id",
+                "mode"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "confirm": {
+            "description": "Set true to submit the batch",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "exchange_id"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "request_more",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "exchange_id": {
+            "type": "string"
+          },
+          "round2_question_ids": {
+            "maxItems": 3,
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "custom_questions": {
+            "maxItems": 2,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "maxLength": 200
+            }
+          }
+        },
+        "required": [
+          "exchange_id"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "close_fit",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "exchange_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "exchange_id"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "get_fit_record",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "exchange_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "exchange_id"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "set_fit_policy",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "dimensions": {
+            "minItems": 1,
+            "maxItems": 10,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "dimension": {
+                  "type": "string"
+                },
+                "value": {},
+                "sensitivity": {
+                  "type": "string",
+                  "enum": [
+                    "low",
+                    "moderate",
+                    "high"
+                  ]
+                },
+                "disclosure_state": {
+                  "type": "string",
+                  "enum": [
+                    "local_only",
+                    "testable",
+                    "reveal_overlap",
+                    "reveal_bucket",
+                    "reveal_exact"
+                  ]
+                },
+                "allowed_intents": {
+                  "minItems": 1,
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "enum": [
+                      "cofound",
+                      "team_up",
+                      "collaborate",
+                      "meet",
+                      "advise"
+                    ]
+                  }
+                },
+                "expires_at": {
+                  "type": "string"
+                },
+                "importance": {
+                  "type": "string",
+                  "enum": [
+                    "essential",
+                    "useful",
+                    "optional",
+                    "do_not_ask"
+                  ]
+                }
+              },
+              "required": [
+                "dimension",
+                "sensitivity",
+                "disclosure_state",
+                "allowed_intents",
+                "expires_at",
+                "importance"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "card_id": {
+            "description": "Which of your cards; defaults to your most recent",
+            "type": "string"
+          },
+          "confirm": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "dimensions"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "prioritize_candidates",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "candidates": {
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "card_id": {
+                  "type": "string"
+                },
+                "headline": {
+                  "type": "string"
+                },
+                "intents": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "seeking": {
+                  "type": "array",
+                  "items": {}
+                },
+                "offering": {
+                  "type": "array",
+                  "items": {}
+                }
+              },
+              "required": [
+                "card_id"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "policy_spike_tags": {
+            "description": "Your role_spike tags",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "policy_antiportfolio_tags": {
+            "description": "Your role_antiportfolio tags",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "policy_intents": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "purpose": {
+            "description": "Why you are ordering; must not be a consequential-eligibility purpose",
+            "type": "string"
+          },
+          "disable_inferred": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "candidates"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "request_fit_handshake",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "intro_id": {
+            "type": "string"
+          },
+          "requested_dimensions": {
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "reciprocal_offer": {
+            "description": "Dimensions you will symmetrically reveal; defaults to requested_dimensions",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "from_card_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "intro_id",
+          "requested_dimensions"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "commit_fit_handshake",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "intro_id": {
+            "type": "string"
+          },
+          "accept_dimensions": {
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "reciprocal_offer": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "from_card_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "intro_id",
+          "accept_dimensions"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "get_fit_handshake",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "intro_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "intro_id"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "reveal_dimension",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "intro_id": {
+            "type": "string"
+          },
+          "dimension": {
+            "type": "string"
+          },
+          "confirm": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "intro_id",
+          "dimension"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "answer_fit_v4",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "intro_id": {
+            "type": "string"
+          },
+          "answers": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "dimension": {
+                  "type": "string"
+                },
+                "mode": {
+                  "type": "string",
+                  "enum": [
+                    "ledger",
+                    "drafted",
+                    "skip"
+                  ]
+                },
+                "ledger_id": {
+                  "type": "string"
+                },
+                "text": {
+                  "type": "string",
+                  "maxLength": 800
+                }
+              },
+              "required": [
+                "dimension",
+                "mode"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "confirm": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "intro_id"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "request_more_v4",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "intro_id": {
+            "type": "string"
+          },
+          "dimension_ids": {
+            "minItems": 1,
+            "maxItems": 3,
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "intro_id",
+          "dimension_ids"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "set_fit_autonomy",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "scope": {
+            "type": "object",
+            "properties": {
+              "intents": {
+                "minItems": 1,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "cofound",
+                    "team_up",
+                    "collaborate",
+                    "meet",
+                    "advise"
+                  ]
+                }
+              },
+              "dimensions": {
+                "minItems": 1,
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "auto_reveal_overlap": {
+                "type": "boolean"
+              },
+              "reveal_bucket_on_reciprocity": {
+                "type": "boolean"
+              },
+              "ask_before_exact": {
+                "type": "boolean"
+              },
+              "forbidden_categories": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "expiry": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "intents",
+              "dimensions",
+              "auto_reveal_overlap",
+              "reveal_bucket_on_reciprocity",
+              "expiry"
+            ],
+            "additionalProperties": false
+          },
+          "card_id": {
+            "type": "string"
+          },
+          "confirm": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "scope"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "pause_fit_autonomy",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "paused": {
+            "type": "boolean"
+          },
+          "card_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "paused"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "get_fit_activity",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "card_id": {
+            "type": "string"
+          },
+          "since": {
+            "type": "string"
+          }
+        },
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "propose_first_step",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "intro_id": {
+            "type": "string"
+          },
+          "half": {
+            "type": "object",
+            "properties": {
+              "purpose": {
+                "type": "string",
+                "maxLength": 200
+              },
+              "next_action": {
+                "type": "string",
+                "maxLength": 200
+              },
+              "meeting_length": {
+                "type": "string",
+                "maxLength": 40
+              },
+              "agenda": {
+                "maxItems": 5,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "maxLength": 200
+                }
+              },
+              "each_wants": {
+                "type": "string",
+                "maxLength": 300
+              },
+              "boundaries": {
+                "maxItems": 5,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "maxLength": 200
+                }
+              },
+              "expiry": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "purpose",
+              "next_action",
+              "meeting_length",
+              "agenda",
+              "each_wants",
+              "boundaries",
+              "expiry"
+            ],
+            "additionalProperties": false
+          },
+          "from_card_id": {
+            "type": "string"
+          },
+          "confirm": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "intro_id",
+          "half"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "approve_first_step",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "intro_id": {
+            "type": "string"
+          },
+          "confirm": {
+            "type": "boolean"
+          },
+          "approved_digest": {
+            "description": "The shared_digest from the preview the principal approved. Required with confirm:true.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "intro_id"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "publish_intent",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "default": "publish",
+            "type": "string",
+            "enum": [
+              "publish",
+              "renew",
+              "replace"
+            ]
+          },
+          "headline": {
+            "description": "One line in your person's own words.",
+            "type": "string"
+          },
+          "seeking": {
+            "description": "What they are looking for.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "offering": {
+            "description": "What they bring.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "purposes": {
+            "description": "Why they want to meet.",
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "cofound",
+                "team_up",
+                "collaborate",
+                "meet",
+                "advise",
+                "work"
+              ]
+            }
+          },
+          "event": {
+            "description": "Only when your person is at an event that gave out an event id. The card is then also listed on that event's public wall page, which anyone with the link can open, and people at the event can search within it. Tell your person this before they approve.",
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]{0,63}$"
+          },
+          "card_id": {
+            "description": "For renew and replace: the card to act on.",
+            "type": "string"
+          },
+          "confirm": {
+            "description": "Send it. Requires approved_digest from the preview.",
+            "type": "boolean"
+          },
+          "approved_digest": {
+            "description": "The approved_digest the preview returned, after the principal approved that exact content.",
+            "type": "string"
+          }
+        },
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "find_people",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "description": "What your person is looking for, in their words.",
+            "type": "string"
+          },
+          "purpose": {
+            "type": "string",
+            "enum": [
+              "cofound",
+              "team_up",
+              "collaborate",
+              "meet",
+              "advise",
+              "work"
+            ]
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 25
+          },
+          "event": {
+            "description": "An event id, to search only the cards published for that event.",
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]{0,63}$"
+          },
+          "assess": {
+            "description": "Opt in to sending selected network-visible fields from your card and up to three search results to OpenAI GPT-6 Astra for an advisory reciprocal-fit assessment. Requires my_card_id and configured API access. Never requests an intro.",
+            "type": "boolean"
+          },
+          "my_card_id": {
+            "description": "Your published card, used only when assess:true.",
+            "type": "string",
+            "maxLength": 160
+          }
+        },
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "mingle_inbox",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "include_finished": {
+            "description": "Also list connections that are already made or closed.",
+            "type": "boolean"
+          }
+        },
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "request_intro",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "to_card_id": {
+            "type": "string",
+            "description": "The card of the person to be introduced to."
+          },
+          "from_card_id": {
+            "type": "string",
+            "description": "Your person's own card."
+          },
+          "purpose": {
+            "type": "string",
+            "enum": [
+              "cofound",
+              "team_up",
+              "collaborate",
+              "meet",
+              "advise",
+              "work"
+            ]
+          },
+          "note": {
+            "type": "string",
+            "description": "Why, in your person's own words. The other person reads this."
+          },
+          "request_id": {
+            "description": "From the preview. Pass it back with confirm so a retry cannot create two introductions.",
+            "type": "string"
+          },
+          "confirm": {
+            "description": "Send it. Requires approved_digest from the preview.",
+            "type": "boolean"
+          },
+          "approved_digest": {
+            "description": "The approved_digest the preview returned, after the principal approved that exact content.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "to_card_id",
+          "from_card_id",
+          "purpose",
+          "note"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "respond_intro",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "intro_id": {
+            "type": "string"
+          },
+          "answer": {
+            "type": "string",
+            "enum": [
+              "interested",
+              "not_now",
+              "not_now_and_block"
+            ]
+          },
+          "confirm": {
+            "description": "Send it. Requires approved_digest from the preview.",
+            "type": "boolean"
+          },
+          "approved_digest": {
+            "description": "The approved_digest the preview returned, after the principal approved that exact content.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "intro_id",
+          "answer"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "continue_connection",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "intro_id": {
+            "type": "string"
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "share_contact",
+              "withdraw_contact",
+              "propose_plan",
+              "approve_plan"
+            ]
+          },
+          "contact": {
+            "description": "For share_contact: the one line the other person will receive.",
+            "type": "string"
+          },
+          "salt": {
+            "description": "For share_contact: from the preview. Pass it back with confirm.",
+            "type": "string"
+          },
+          "plan": {
+            "description": "For propose_plan: purpose, next_action, meeting_length, agenda, each_wants, boundaries, expiry.",
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {}
+          },
+          "confirm": {
+            "description": "Send it. Requires approved_digest from the preview.",
+            "type": "boolean"
+          },
+          "approved_digest": {
+            "description": "The approved_digest the preview returned, after the principal approved that exact content.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "intro_id",
+          "action"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "manage_intent",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "withdraw_request",
+              "withdraw_interest",
+              "block_pair",
+              "take_card_down"
+            ]
+          },
+          "intro_id": {
+            "type": "string"
+          },
+          "card_id": {
+            "type": "string"
+          },
+          "confirm": {
+            "description": "Send it. Requires approved_digest from the preview.",
+            "type": "boolean"
+          },
+          "approved_digest": {
+            "description": "The approved_digest the preview returned, after the principal approved that exact content.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "action"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "mingle_settings",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "show",
+              "set_email",
+              "stop_email",
+              "background_checks"
+            ]
+          },
+          "email": {
+            "type": "string"
+          },
+          "enabled": {
+            "description": "For background_checks.",
+            "type": "boolean"
+          },
+          "confirm": {
+            "description": "Send it. Requires approved_digest from the preview.",
+            "type": "boolean"
+          },
+          "approved_digest": {
+            "description": "The approved_digest the preview returned, after the principal approved that exact content.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "action"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
+      }
+    }
+  ]
+}
