@@ -17,7 +17,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
-import { keepClosedObjects } from "./zod3-compat.js";
+import { closeToolInputSchema } from "./closed-objects.js";
 import { sign, canonicalize } from "agent-passport-system";
 import { readOwnCard } from "./owner-read.js";
 import { createHash, randomUUID } from "node:crypto";
@@ -121,13 +121,11 @@ const LEGACY_TOOLS_ENABLED = process.env.MINGLE_LEGACY_TOOLS === "1";
 const CANONICAL_NAMES = new Set<string>(CANONICAL_TOOL_NAMES);
 let registeringCanonical = false;
 const registerToolOnServer = server.tool.bind(server) as (...a: any[]) => any;
-// Every registration passes through here, so this is also the one place that keeps the
-// advertised input schema as zod 3 published it (see zod3-compat.ts). A tool with an empty
-// shape is left alone, because the SDK already built that one with zod 4 under zod 3 too, and
-// it was published without additionalProperties.
+// Every registration passes through here, so this is also the one place that keeps
+// additionalProperties: false in the advertised input schema (see closed-objects.ts).
 const registerRawTool = (...a: any[]) => {
   const registered = registerToolOnServer(...a);
-  if (Object.keys(registered?.inputSchema?._zod?.def?.shape ?? {}).length) keepClosedObjects(registered.inputSchema);
+  closeToolInputSchema(registered?.inputSchema);
   return registered;
 };
 (server as any).tool = (name: string, ...rest: any[]) => {
